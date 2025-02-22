@@ -1,0 +1,7 @@
+TODO:
+- Finish and debug rust interpreter 1.0
+- Add features to interpreter, such as better error messages and ensuring reasonable code (no lists in conditional primary args)
+- get a feel for the language while refining interpreter, as well as language syntax & semantics
+- write a compiler (probably to c then to .exe) for qrt
+- rewrite compiler IN qrt, and bask in glory
+- make a good IDE for qrt
