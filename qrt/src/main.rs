@@ -40,9 +40,9 @@ enum Var {
 enum Abstract {
     Var(Var), //Values
     Control, //Continue evaluation after actions
-    Operator(u8), //Generic operators
+    Operator(u8), //Generic operators, also include "loops" that haven't been initialized yet.
     Conditional,
-    Loop(usize, usize), //Loops, must contain ID and the start of their looping code
+    Loop(usize), //Loops contains start of looping code, on "on"
 }
 
 
@@ -116,7 +116,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                 on+=1;
                 stack.push_front(Abstract::Var(Var::Gestalt(gestalt)));
-}
+            }
 
             //Set literal begin
             b'[' => {
@@ -128,12 +128,42 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             b',' | b'(' => {on+=1;}
 
             //Secondary argument beginning, checks if there is a conditional waiting, and skips code if there is and the latest value in the stack is false (<=0.0).
+            //Also checks if there is a "baby" loop, and sets the relevant beginning and ID.
             b'{' => {
                 match stack.get(1).unwrap() {
                     Abstract::Conditional => {
                         match unpack_linear(stack.get(0).unwrap()) {
                             Some(b) => if b>0.0  {on+=1;} else {on = find_bracket_pair(program, on+1)}
                             None => {panic!("conditional was given nonlinear argument")}
+                        }
+                    }
+
+                    Abstract::Operator(o) => {
+                        if(o==b'~'){
+                            let killalias = match unpack_gestalt(stack.pop_front().unwrap()) {
+                                Some(a) => a,
+                                None => {panic!("loop was given nongestalt kill alias")}
+                            }
+
+                            //assigns kill variable for loop
+                            map.insert(&String::from_utf8(killalias), Var::Kill(loopidon));
+
+                            //pops off baby loop
+                            stack.pop_front();
+
+                            //pushes on complete loop
+                            stack.push_front(Abstract::Loop(on+1))
+
+                            //pushes on loop id
+                            stack.push_front(Abstract::Var(Var::Linear(loopidon)))
+                            
+                            /*
+                            new idea: store in the following order:
+                            loop op -> kill id -> code, if code returns kill id then kill.
+                            loop op should still store code "on"
+                             */
+
+                            loopidon+=1;
                         }
                     }
 
@@ -167,39 +197,29 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             //Input
             b'$' => {on+=1;stack.push_front(Abstract::Var(input.clone()));}
 
-            //Alias end (Variable referencing, also handles loop termination with kill variables)
+            //Alias end (variable referencing)
             b')' => {
                 
                 //Yeah look at this gross motherfucker. It matches the first item in the q to a Gestalt and looks for a var corresponding to that Gestalt in the map. Simple 'as
                 let var = map.get(&String::from_utf8(match stack.pop_front().unwrap() {Abstract::Var(v) => match v {Var::Gestalt(g) => g, _ => Vec::from([b'_'])}, _ => Vec::from([b'_'])}).unwrap()).unwrap().clone();
-
-                //This is even worse. If the variable is a kill, it starts removing everything in the queue until it reaches the matching loop, then destroys it, setting the on to after the loop.
-                match var {Var::Kill(id) => {while match stack.pop_front().unwrap() {Abstract::Loop(loopid, loopon) => {if loopid == id {on = find_bracket_pair(program, loopon);true}else {false}}, _=> false}{}} _ => {}};
-
-                //TODO: move the on variable to the appropriate place (at the end of loop) after this
-
                 stack.push_front(Abstract::Var(var));
             }
 
-            //TODO: conditional operator, loop operator, evaluation operator
-            b'?' => {
-
-            }
-
-            b'~' => {
-
-            }
-
-            b'!' => {
-
-            }
+            b'?' => {stack.push_front(Abstract::Conditional);on+=1;}
 
             //evaluates a ton of "normal" operators (artithmetic, boolean, comparison, etc.)
-            b'}' => {}
+            //Should also handle loop recursion, and termination if secondary variable has 
+            //evaluated to the relevant kill. Should contain recursive function evaluation
+            //capabilities. Should handle environmental terminal calls ("unlimited functionality, apostrophe operator")
+            //
+            b'}' => {
+                match 
+            }
 
-            //Anything else (valid) should be a normal operator, so they just get appended. 
+            //Anything else (valid) should be a normal operator, so they just get appended.
+            //Loops are included in here because they are initially appended as uninitialized.
             _ => {
-                on+=1;stack.push_front(Abstract::Operator(program[on]))
+                stack.push_front(Abstract::Operator(program[on]));on+=1
             },
         }
 
@@ -230,6 +250,26 @@ fn unpack_linear(packed: &Abstract) -> Option<f64> {
             }
         }
 
+        _ => None
+    }
+}
+
+fn unpack_gestalt(packed: &Abstract) -> Option<Vec<u8>> {
+    return match packed {
+        Abstract::Var(v) => {
+            match v {
+                Var::Gestalt(b) => Some(b.clone()),
+                
+                _ => None
+            }
+        }
+       _ => None
+    }
+}
+
+fn unpack_operator(packed: &Abstract) -> Option<u8> {
+    return match packed {
+        Abstract::Operator(o) => Some(o),
         _ => None
     }
 }
