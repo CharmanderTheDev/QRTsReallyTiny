@@ -127,12 +127,13 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             //Set literal continuation and alias beginning respectively.
             b',' | b'(' => {on+=1;}
 
-            //Secondary argument beginning, checks if there is a conditional waiting, and skips code if there is and the latest value in the stack is false.
+            //Secondary argument beginning, checks if there is a conditional waiting, and skips code if there is and the latest value in the stack is false (<=0.0).
             b'{' => {
                 match stack.get(1).unwrap() {
                     Abstract::Conditional => {
                         match unpack_linear(stack.get(0).unwrap()) {
-                            Some(b) => if b>0.0  {}
+                            Some(b) => if b>0.0  {on+=1;} else {on = find_bracket_pair(program, on+1)}
+                            None => {panic!("conditional was given nonlinear argument")}
                         }
                     }
 
@@ -185,7 +186,15 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
             }
 
-            //evaluates a ton of "normal" operators 
+            b'~' => {
+
+            }
+
+            b'!' => {
+
+            }
+
+            //evaluates a ton of "normal" operators (artithmetic, boolean, comparison, etc.)
             b'}' => {}
 
             //Anything else (valid) should be a normal operator, so they just get appended. 
@@ -211,11 +220,11 @@ fn compile(program: &Vec<u8>) {
 
 }
 
-fn unpack_linear(packed: Abstract) -> Option<f64> {
+fn unpack_linear(packed: &Abstract) -> Option<f64> {
     return match packed {
         Abstract::Var(v) => {
             match v {
-                Var::Linear(b) => Some(b),
+                Var::Linear(b) => Some(*b),
 
                 _ => None
             }
@@ -225,7 +234,8 @@ fn unpack_linear(packed: Abstract) -> Option<f64> {
     }
 }
 
-//Helper function, used to find the end of brackets
+//Helper function, used to find the end of secondary args. Expects to start the character directly after the first bracket.
+//Returns the position directly after the pairing bracket.
 fn find_bracket_pair(program: &Vec<u8>, mut on: usize) -> usize {
         let (mut bracket_number, mut gestalt, mut escape) = (1, false, false);
 
