@@ -136,6 +136,9 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             Some(b) => if b>0.0  {on+=1;} else {on = find_bracket_pair(program, on+1)}
                             None => {panic!("conditional was given nonlinear argument")}
                         }
+
+                        //Removes the conditional operator and value
+                        stack.pop_front();stack.pop_front()
                     }
 
                     Abstract::Operator(o) => {
@@ -213,7 +216,11 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             //capabilities. Should handle environmental terminal calls ("unlimited functionality, apostrophe operator")
             //
             b'}' => {
-                match 
+                match unpack_operator(stack.get(2)) {
+                    b'~' => {
+                        if 
+                    }
+                }
             }
 
             //Anything else (valid) should be a normal operator, so they just get appended.
@@ -270,6 +277,19 @@ fn unpack_gestalt(packed: &Abstract) -> Option<Vec<u8>> {
 fn unpack_operator(packed: &Abstract) -> Option<u8> {
     return match packed {
         Abstract::Operator(o) => Some(o),
+        _ => None
+    }
+}
+
+fn unpack_killid(packed: &Abstract) -> Option<usize> {
+    return match packed {
+        Abstract::Var(v) => {
+            match v {
+                Var::Kill(k) => k
+                _ => None
+            }
+        }
+
         _ => None
     }
 }
