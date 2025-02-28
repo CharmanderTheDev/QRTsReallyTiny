@@ -275,7 +275,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             let truth = unpack_bool(stack.get(0)).unwrap() && unpack_bool(stack.get(1)).unwrap();
 
                             stack.pop_front;stack.pop_front;stack.pop_front;
-                            stack.push_front(Abstract::Var(Var::Linear(truth?1.0:0.0)))
+                            stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})))
                         }
 
                         //Or
@@ -283,7 +283,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             let truth = unpack_bool(stack.get(0)).unwrap() || unpack_bool(stack.get(1)).unwrap();
 
                             stack.pop_front;stack.pop_front;stack.pop_front;
-                            stack.push_front(Abstract::Var(Var::Linear(truth?1.0:0.0)));
+                            stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})));
                         }
 
                     //COMPARISON
@@ -293,7 +293,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             let truth = unpack_linear(stack.get(1)).unwrap() > unpack_linear(stack.get(0)).unwrap();
 
                             stack.pop_front;stack.pop_front;stack.pop_front;
-                            stack.push_front(Abstract::Var(Var::Linear(truth?1.0:0.0)))
+                            stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})))
                         }
 
                         //Equal to 
@@ -301,7 +301,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             let truth = unpack_linear(stack.get(1)).unwrap() == unpack_linear(stack.get(0)).unwrap();
 
                             stack.pop_front;stack.pop_front;stack.pop_front;
-                            stack.push_front(Abstract::Var(Var::Linear(truth?1.0:0.0)))
+                            stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})))
                         }
 
                         //Less than
@@ -309,7 +309,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             let truth = unpack_linear(stack.get(1)).unwrap() < unpack_linear(stack.get(0)).unwrap();
 
                             stack.pop_front;stack.pop_front;stack.pop_front;
-                            stack.push_front(Abstract::Var(Var::Linear(truth?1.0:0.0)))
+                            stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})))
                         }
 
                     //MISC
@@ -338,7 +338,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                         //Set access
                         b'`' => {
-
+                            unpack_set(stack.get(1)).unwrap().get(unpack_linear(stack.get(0)).unwrap().floor())
                         }
 
                         //Wildcard/terminal access
@@ -439,6 +439,19 @@ fn unpack_bool(packed: &Abstract) -> Option<bool> {
         }
 
         _ => None
+    }
+}
+
+fn unpack_set(packed: &Abstract) -> Option<&Vec<Var>> {
+    return match packed {
+        Abstract::Var(v) => {
+            match v {
+                Var::Set(s) => Some(&s),
+                
+                _ => None
+            }
+        }
+       _ => None
     }
 }
 
