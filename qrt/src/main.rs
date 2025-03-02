@@ -1,14 +1,15 @@
 extern crate rand;
 
-use std::{collections::{HashMap, VecDeque}, env, fs, vec::Vec, rand::random};
+use std::{collections::{HashMap, VecDeque}, env, fs, vec::Vec};
+use rand::random;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    let file = fs::read_to_string(&args[1]).expect("No such file found").into_bytes();
+    let file = fs::read_to_string(&args[1]).expect("No such file found").trim().to_string().into_bytes();
 
     let evaluation = evaluate(&file, &Var::Linear(1.2));
-
+    
     println!("{}",
         match evaluation {
             Var::Gestalt(g) => String::from_utf8(g).unwrap(),
@@ -17,7 +18,12 @@ fn main() {
             _=> String::from("unhandled")
         }
     );
+    
 
+}
+
+fn qlog() {
+    println!("log!");
 }
 
 #[derive(Clone)]
@@ -58,15 +64,19 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
     loop {
         
+        print!("{}", (program[on] as char));
+
         match program[on] {
+
             //Linear literal
-            b'0'..b'9' | b'.' => {
+            b'0'..=b'9' => {
+
                 let mut gestalt: Vec<u8>  = Vec::new();
 
                 loop {
                     if on>=program.len() {break}
                     match program[on] {
-                        b'0'..b'9' | b'.' => {
+                        b'0'..=b'9' | b'.' => {
                             gestalt.push(program[on]);
                             on+=1
                         }
@@ -124,8 +134,8 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                 stack.push_front(Abstract::Operator(b'['));
             }
 
-            //Set literal continuation and alias beginning respectively.
-            b',' | b'(' => {on+=1;}
+            //Set literal continuation
+            b',' => {on+=1;}
 
             //Secondary argument beginning, checks if there is a conditional waiting, and skips code if there is and the latest value in the stack is false (<=0.0).
             //Also checks if there is a "baby" loop, and sets the relevant beginning on it, "maturing" the loop.
@@ -139,18 +149,23 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                         }
 
                         //Removes the conditional operator and value
-                        stack.pop_front();stack.pop_front()
+                        stack.pop_front();stack.pop_front();
                     }
 
                     Abstract::Operator(o) => {
-                        if(o==b'~'){
+                        if o==&b'~'{
 
-                            //pops off baby loop
-                            stack.pop_front();
+                            //convert latest value to a killid for the matured loop
+                            let killid = match stack.pop_front().unwrap() {Abstract::Var(v) => v, _ => panic!("loop was given nonvar kill word")};
 
-                            //pushes on complete loop
-                            stack.push_front(Abstract::Loop(on+1))
+                            //pops off killid and baby loop
+                            stack.pop_front();stack.pop_front();
+
+                            //pushes on complete loop with correct beginning, and the killid
+                            stack.push_front(Abstract::Loop(on+1));stack.push_front(Abstract::Var(killid));
                         }
+
+                        on+=1;
                     }
 
                     _ => {on+=1;}
@@ -180,18 +195,23 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             //Void literal
             b'_' => {on+=1;stack.push_front(Abstract::Var(Var::Void));}
             
-            //Input
+            //Input literal
             b'$' => {on+=1;stack.push_front(Abstract::Var(input.clone()));}
 
-            //Random literal begin
+            //Random literal
             b'%' => {on+=1;stack.push_front(Abstract::Var(Var::Linear(random::<f64>())));}
 
             //Alias end (variable referencing)
             b')' => {
-                
+
                 //Yeah look at this gross motherfucker. It matches the first item in the q to a Gestalt and looks for a var corresponding to that Gestalt in the map. Simple 'as
                 let var = map.get(&String::from_utf8(match stack.pop_front().unwrap() {Abstract::Var(v) => match v {Var::Gestalt(g) => g, _ => Vec::from([b'_'])}, _ => Vec::from([b'_'])}).unwrap()).unwrap().clone();
+                
+                stack.pop_front(); //removes the opening paratheses of variable reference
+                
                 stack.push_front(Abstract::Var(var));
+
+                on+=1;
             }
 
             b'?' => {stack.push_front(Abstract::Conditional);on+=1;}
@@ -202,21 +222,27 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             //capabilities. Should handle environmental terminal calls ("unlimited functionality, apostrophe operator")
             //
             b'}' => {
-                match unpack_operator(stack.get(2)) { Some(a) => { match a {
+
+                //Current problem: when reaching the closing bracket of a successful conditional,
+                //Is unable to find stack.get(2), due to the internal code of the conditional
+                //Not actually returning a value and instead being a control function.
+                //Possible solution, implement the control type or return a null.
+
+                match unpack_operator(stack.get(2).unwrap()) { Some(a) => { match a {
 
                     //CONTROL
 
                         //Alias assignment
                         b'#' => {
                             map.insert(
-                                String::from_utf8(unpack_gestalt(stack.get(1)).unwrap()).to_string(),
-                                match stack.get(0) {
-                                    Abstract::Var(v) => v,
+                                String::from_utf8(unpack_gestalt(stack.get(1).unwrap()).unwrap()).unwrap().to_string(),
+                                match stack.get(0).unwrap() {
+                                    Abstract::Var(v) => v.clone(),
                                     _ => Var::Void,
                                 }
                             );
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
                         }                
 
@@ -224,45 +250,48 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                         //Addition
                         b'+' => {
-                            let sum = unpack_linear(stack.get(0)).unwrap() + unpack_linear(stack.get(1)).unwrap();
+                            let sum = unpack_linear(stack.get(0).unwrap()).unwrap() + unpack_linear(stack.get(1).unwrap()).unwrap();
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
 
                             stack.push_front(Abstract::Var(Var::Linear(sum)));
                         }
                         //Subtraction
                         b'-' => {
-                            let difference = unpack_linear(stack.get(0)).unwrap() - unpack_linear(stack.get(1)).unwrap();
+                            let difference = unpack_linear(stack.get(0).unwrap()).unwrap() - unpack_linear(stack.get(1).unwrap()).unwrap();
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
 
                             stack.push_front(Abstract::Var(Var::Linear(difference)));
                         }
+
                         //Multiplication
                         b'*' => {
-                            let product = unpack_linear(stack.get(0)).unwrap() * unpack_linear(stack.get(1)).unwrap();
+                            let product = unpack_linear(stack.get(0).unwrap()).unwrap() * unpack_linear(stack.get(1).unwrap()).unwrap();
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
 
                             stack.push_front(Abstract::Var(Var::Linear(product)));
                         }
+
                         //Division
                         b'/' => {
-                            let quotient = unpack_linear(stack.get(0)).unwrap() / unpack_linear(stack.get(1)).unwrap();
+                            let quotient = unpack_linear(stack.get(0).unwrap()).unwrap() / unpack_linear(stack.get(1).unwrap()).unwrap();
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
 
                             stack.push_front(Abstract::Var(Var::Linear(quotient)));
                         }
+
                         //Exponentiation
                         b'^' => {
-                            let power = unpack_linear(stack.get(1)).unwrap().powf(unpack_linear(stack.get(0)).unwrap());
+                            let power = unpack_linear(stack.get(0).unwrap()).unwrap().powf(unpack_linear(stack.get(1).unwrap()).unwrap());
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
 
                             stack.push_front(Abstract::Var(Var::Linear(power)));
@@ -272,43 +301,54 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                         
                         //And
                         b'&' => {
-                            let truth = unpack_bool(stack.get(0)).unwrap() && unpack_bool(stack.get(1)).unwrap();
+                            let truth = unpack_bool(stack.get(0).unwrap()).unwrap() && unpack_bool(stack.get(1).unwrap()).unwrap();
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
+                            on+=1;
+
                             stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})))
                         }
 
                         //Or
-                        b'&' => {
-                            let truth = unpack_bool(stack.get(0)).unwrap() || unpack_bool(stack.get(1)).unwrap();
+                        b'|' => {
+                            let truth = unpack_bool(stack.get(0).unwrap()).unwrap() && unpack_bool(stack.get(1).unwrap()).unwrap();
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
-                            stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})));
+                            stack.pop_front();stack.pop_front();stack.pop_front();
+                            on+=1;
+
+                            stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})))
                         }
 
                     //COMPARISON
 
                         //Greater than
                         b'>' => {
-                            let truth = unpack_linear(stack.get(1)).unwrap() > unpack_linear(stack.get(0)).unwrap();
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            let truth = unpack_linear(stack.get(1).unwrap()).unwrap() > unpack_linear(stack.get(0).unwrap()).unwrap();
+
+                            stack.pop_front();stack.pop_front();stack.pop_front();
+                            on+=1;
+
                             stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})))
                         }
 
                         //Equal to 
                         b'=' => {
-                            let truth = unpack_linear(stack.get(1)).unwrap() == unpack_linear(stack.get(0)).unwrap();
+                            let truth = unpack_linear(stack.get(1).unwrap()).unwrap() == unpack_linear(stack.get(0).unwrap()).unwrap();
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
+                            on+=1;
+
                             stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})))
                         }
 
                         //Less than
                         b'<' => {
-                            let truth = unpack_linear(stack.get(1)).unwrap() < unpack_linear(stack.get(0)).unwrap();
+                            let truth = unpack_linear(stack.get(1).unwrap()).unwrap() < unpack_linear(stack.get(0).unwrap()).unwrap();
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
+                            on+=1;
+
                             stack.push_front(Abstract::Var(Var::Linear(if truth{1.0}else{0.0})))
                         }
 
@@ -317,16 +357,16 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                         //Evaluation
                         b'!' => {
                             let eva = evaluate(
-                                unpack_gestalt(stack.get(1)).unwrap(),
-                                match stack.get(2) {
+                                &unpack_gestalt(stack.get(1).unwrap()).unwrap(),
+                                match stack.get(2).unwrap() {
                                     Abstract::Var(v) => v,
-                                    _ => Var::Void,
+                                    _ => &Var::Void,
                                 }
                             );
 
-                            stack.pop_front;stack.pop_front;stack.pop_front;
+                            stack.pop_front();stack.pop_front();stack.pop_front();
 
-                            stack.push_front(eva);
+                            stack.push_front(Abstract::Var(eva));
 
                             on+=1;
                         }
@@ -338,12 +378,17 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                         //Set access
                         b'`' => {
-                            unpack_set(stack.get(1)).unwrap().get(unpack_linear(stack.get(0)).unwrap().floor())
+                            
                         }
 
                         //Wildcard/terminal access
                         b'\'' => {
 
+                        }
+                        
+                        //Invalid operator
+                        _ => {
+                            panic!("Invalid operator");
                         }
 
                 }}
@@ -354,21 +399,25 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                             Abstract::Conditional => {on+=1;}
 
-                            Abstract::Loop(s) => {
+                            Abstract::Loop(start) => {
+
+                                let start = start.clone();
                                 //If the evaluation of the secondary argument is gestalt equal to the first,
                                 //Then the loop is terminated.
-                                if gestalt_equivilence(unpack_gestalt(stack.get(0)), unpack_gestalt(stack.get(1))) {
+                                if &unpack_gestalt(stack.get(0).unwrap()).unwrap() == &unpack_gestalt(stack.get(1).unwrap()).unwrap() {
                                     //removes the whole of the loop code and moves forward
-                                    stack.pop_front;stack.pop_front;stack.pop_front;
+                                    stack.pop_front();stack.pop_front();stack.pop_front();
 
                                     on+=1;
                                 } else {
                                     //removes the secondary argument and starts over at the loop's associated on value
-                                    stack.pop_front;
+                                    stack.pop_front();
                                     
-                                    on = s;
+                                    on = start;
                                 }
                             }
+
+                            _ => {}
                         }
                     }
                 }
@@ -376,6 +425,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
             //Anything else (valid) should be a normal operator, so they just get appended.
             //Loops are included in here because they are initially appended as uninitialized.
+            //Alias beginning is included in here as well.
             _ => {
                 stack.push_front(Abstract::Operator(program[on]));on+=1;
             },
@@ -427,7 +477,7 @@ fn unpack_gestalt(packed: &Abstract) -> Option<Vec<u8>> {
 
 fn unpack_operator(packed: &Abstract) -> Option<u8> {
     return match packed {
-        Abstract::Operator(o) => Some(o),
+        Abstract::Operator(o) => Some(*o),
         _ => None
     }
 }
@@ -455,8 +505,8 @@ fn unpack_set(packed: &Abstract) -> Option<&Vec<Var>> {
     }
 }
 
-fn gestalt_equivilence(a: &Vec<u8>, b: &Vec<u8>) -> boolean {
-    String::from_utf8(a) == String::from_utf8(b)
+fn gestalt_equivilence(a: &Vec<u8>, b: &Vec<u8>) -> bool {
+    a == b
 }
 
 //Helper function, used to find the end of secondary args. Expects to start the character directly after the first bracket.
