@@ -1,12 +1,14 @@
 IMMEDIATE:
-- implement automatic whitespace removal to allow for easier writing
-- change alias referencing to not require gestalt quotes
-- generally make gestalts better, such as having functional gestalts not need so many backslashes
-- 
+- change alias referencing and assignment to not use gestalt (quotes)
+- add in specific function definition operator
+- implement file reading and terminal access operators
+- implement comment functionality
+- finish operator completion/typecasting and general operator macro
 
+MISC:
+- write mathematical function library (trig, calc, constants, etc)
 
-
-LONGTERML
+LONGTERM:
 - Finish and debug rust interpreter 1.0
 - Add features to interpreter, such as better error messages and ensuring reasonable code (no lists in conditional primary args)
 - get a feel for the language while refining interpreter, as well as language syntax & semantics

@@ -142,6 +142,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
             //Secondary argument beginning, checks if there is a conditional waiting, and skips code if there is and the latest value in the stack is false (<=0.0).
             //Also checks if there is a "baby" loop, and sets the relevant beginning on it, "maturing" the loop.
+            //Also checks for function definitions, adds the given name to the function map and moves past the interior code
             b'{' => {
                 match stack.get(1).unwrap() {
                     
@@ -202,17 +203,14 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             //Random literal
             b'%' => {on+=1;stack.push_front(Abstract::Var(Var::Linear(random::<f64>())));}
 
-            //Alias end (variable referencing)
-            b')' => {
+            //Alias (variable referencing)
+            b'(' => { on+=1;
 
-                //Yeah look at this gross motherfucker. It matches the first item in the q to a Gestalt and looks for a var corresponding to that Gestalt in the map. Simple 'as
-                let var = map.get(&String::from_utf8(match stack.pop_front().unwrap() {Abstract::Var(v) => match v {Var::Gestalt(g) => g, _ => Vec::from([b'_'])}, _ => Vec::from([b'_'])}).unwrap()).unwrap().clone();
-                
-                stack.pop_front(); //removes the opening paratheses of variable reference
-                
-                stack.push_front(Abstract::Var(var));
+                let varname = Vec<u8>::new();
 
-                on+=1;
+                while program[on] != b')' {varname.push(program[on]);on+=1;}on+=1;
+
+                stack.push_front(Abstract::Var(map.get(&String::from_utf8(varname).unwrap()).unwrap()));
             }
 
             //Special "conditional" operator
@@ -397,11 +395,16 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             
                         }
 
-                        //Wildcard/terminal access
+                        //terminal access
                         b'\'' => {
 
                         }
                         
+                        //Function definition
+                        b':' => {
+
+                        }
+
                         //Invalid operator
                         _ => {
                             panic!("Invalid operator");
