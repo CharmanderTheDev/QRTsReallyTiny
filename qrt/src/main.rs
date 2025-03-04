@@ -9,7 +9,7 @@ fn main() {
 
     let file: Vec<u8> = fs::read_to_string(&args[1]).expect("No such file found").trim().as_bytes().into();
 
-    let evaluation = evaluate(&file, &Var::Linear(3.0));
+    let evaluation = evaluate(&file, &Var::Linear(5.0));
     
     println!("{}",
         match evaluation {
@@ -28,6 +28,7 @@ fn qlog() {
 }
 
 #[derive(Clone)]
+#[derive(Debug)]
 enum Var {
     Void, //Null type
     Linear(f64), //Numbers
@@ -45,6 +46,7 @@ enum Var {
 }
 
 #[derive(Clone)]
+#[derive(Debug)]
 enum Abstract {
     Var(Var), //Values
     Control, //Continue evaluation after actions
@@ -65,6 +67,9 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
     loop {
 
         match program[on] {
+
+            //Uncaught whitespace
+            10 | 32 => {on+=1;}
 
             //Linear literal
             b'0'..=b'9' => {
@@ -220,6 +225,11 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                 None => Var::Void 
             }}
 
+            //Comments
+            b'\\' => {
+
+            }
+
             //evaluates a ton of "normal" operators (artithmetic, boolean, comparison, etc.)
             //Should also handle loop recursion, and termination if secondary variable has 
             //evaluated to the relevant kill. Should contain recursive function evaluation
@@ -264,7 +274,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                         }
                         //Subtraction
                         b'-' => {
-                            let difference = unpack_linear(stack.get(0).unwrap()).unwrap() - unpack_linear(stack.get(1).unwrap()).unwrap();
+                            let difference = unpack_linear(stack.get(1).unwrap()).unwrap() - unpack_linear(stack.get(0).unwrap()).unwrap();
 
                             stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
@@ -284,7 +294,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                         //Division
                         b'/' => {
-                            let quotient = unpack_linear(stack.get(0).unwrap()).unwrap() / unpack_linear(stack.get(1).unwrap()).unwrap();
+                            let quotient = unpack_linear(stack.get(1).unwrap()).unwrap() / unpack_linear(stack.get(0).unwrap()).unwrap();
 
                             stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
@@ -294,7 +304,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                         //Exponentiation
                         b'^' => {
-                            let power = unpack_linear(stack.get(0).unwrap()).unwrap().powf(unpack_linear(stack.get(1).unwrap()).unwrap());
+                            let power = unpack_linear(stack.get(1).unwrap()).unwrap().powf(unpack_linear(stack.get(0).unwrap()).unwrap());
 
                             stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
@@ -316,7 +326,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                         //Or
                         b'|' => {
-                            let truth = unpack_bool(stack.get(0).unwrap()).unwrap() && unpack_bool(stack.get(1).unwrap()).unwrap();
+                            let truth = unpack_bool(stack.get(0).unwrap()).unwrap() || unpack_bool(stack.get(1).unwrap()).unwrap();
 
                             stack.pop_front();stack.pop_front();stack.pop_front();
                             on+=1;
