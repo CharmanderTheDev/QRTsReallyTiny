@@ -365,7 +365,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                                 &unpack_gestalt(stack.get(1).unwrap()).unwrap(),
                                 
                                 match stack.get(0).unwrap() {
-                                    Abstract::Var(v) => v,
+                                    Abstract::Var(v) => &v,
                                     _ => &Var::Void,
                                 }
                             );
@@ -452,7 +452,7 @@ fn compile(program: &Vec<u8>) {
 }
 
 fn operate<Atype, Btype, Outtype>(arg1: Atype, arg2: Btype, func: fn(Atype, Btype) -> Outtype, stack: VecDeque<Abstract>) {
-    
+
 }
 
 fn unpack_linear(packed: &Abstract) -> Option<f64> {
