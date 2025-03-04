@@ -4,11 +4,12 @@ use std::{collections::{HashMap, VecDeque}, env, fs, vec::Vec};
 use rand::random;
 
 fn main() {
+
     let args: Vec<String> = env::args().collect();
 
-    let file = fs::read_to_string(&args[1]).expect("No such file found").trim().to_string().into_bytes();
+    let file: Vec<u8> = fs::read_to_string(&args[1]).expect("No such file found").trim().as_bytes().into();
 
-    let evaluation = evaluate(&file, &Var::Linear(1.2));
+    let evaluation = evaluate(&file, &Var::Linear(3.0));
     
     println!("{}",
         match evaluation {
@@ -32,7 +33,6 @@ enum Var {
     Linear(f64), //Numbers
     Gestalt(Vec<u8>), //Strings
     Set(Vec<Var>), //Lists
-    Kill(usize) //Loop killer
 
 } impl Var {
     fn bool(&self) -> bool {
@@ -63,8 +63,6 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
     let mut on = 0;
 
     loop {
-        
-        print!("{}", (program[on] as char));
 
         match program[on] {
 
@@ -143,13 +141,11 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                 match stack.get(1).unwrap() {
                     
                     Abstract::Conditional => {
+
                         match unpack_linear(stack.get(0).unwrap()) {
-                            Some(b) => if b>0.0  {on+=1;} else {on = find_bracket_pair(program, on+1)}
+                            Some(b) => if b>0.0  {on+=1;} else {on = find_bracket_pair(program, on+1);stack.pop_front();stack.pop_front();/*pops conditional and condition*/}
                             None => {panic!("conditional was given nonlinear argument")}
                         }
-
-                        //Removes the conditional operator and value
-                        stack.pop_front();stack.pop_front();
                     }
 
                     Abstract::Operator(o) => {
@@ -214,7 +210,15 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                 on+=1;
             }
 
+            //Special "conditional" operator
             b'?' => {stack.push_front(Abstract::Conditional);on+=1;}
+
+            //Terminator character, immediately matches top of stack to var and returns it, if its not a var then it returns void.
+            b';' => {return match stack.pop_front() {
+                Some(a) => match a {Abstract::Var(v) => v, _ => Var::Void}
+
+                None => Var::Void 
+            }}
 
             //evaluates a ton of "normal" operators (artithmetic, boolean, comparison, etc.)
             //Should also handle loop recursion, and termination if secondary variable has 
@@ -243,6 +247,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             );
 
                             stack.pop_front();stack.pop_front();stack.pop_front();
+
                             on+=1;
                         }                
 
@@ -358,7 +363,8 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                         b'!' => {
                             let eva = evaluate(
                                 &unpack_gestalt(stack.get(1).unwrap()).unwrap(),
-                                match stack.get(2).unwrap() {
+                                
+                                match stack.get(0).unwrap() {
                                     Abstract::Var(v) => v,
                                     _ => &Var::Void,
                                 }
@@ -397,7 +403,13 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                     None => {
                         match stack.get(2).unwrap() {
 
-                            Abstract::Conditional => {on+=1;}
+
+                            Abstract::Conditional => {
+
+                                stack.pop_front();stack.pop_front();stack.pop_front();
+
+                                on+=1;
+                            }
 
                             Abstract::Loop(start) => {
 
@@ -410,6 +422,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                                     on+=1;
                                 } else {
+
                                     //removes the secondary argument and starts over at the loop's associated on value
                                     stack.pop_front();
                                     
@@ -430,22 +443,16 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                 stack.push_front(Abstract::Operator(program[on]));on+=1;
             },
         }
-
-        //Breaks if the queue has one literal element
-        if match stack.front() {Some(v) => {match v {Abstract::Var(_) => true, _=> false}} None => false} & (stack.len() == 1){break}
-    
     }
-
-    return match stack.pop_front().unwrap() {
-        Abstract::Var(v) => v,
-    
-        _ => Var::Void
-    };
 }
 
 //Removes comments and whitespace
 fn compile(program: &Vec<u8>) {
 
+}
+
+fn operate<Atype, Btype, Outtype>(arg1: Atype, arg2: Btype, func: fn(Atype, Btype) -> Outtype, stack: VecDeque<Abstract>) {
+    
 }
 
 fn unpack_linear(packed: &Abstract) -> Option<f64> {
@@ -503,10 +510,6 @@ fn unpack_set(packed: &Abstract) -> Option<&Vec<Var>> {
         }
        _ => None
     }
-}
-
-fn gestalt_equivilence(a: &Vec<u8>, b: &Vec<u8>) -> bool {
-    a == b
 }
 
 //Helper function, used to find the end of secondary args. Expects to start the character directly after the first bracket.

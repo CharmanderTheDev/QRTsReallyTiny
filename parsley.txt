@@ -1,4 +1,12 @@
-TODO:
+IMMEDIATE:
+- implement automatic whitespace removal to allow for easier writing
+- change alias referencing to not require gestalt quotes
+- generally make gestalts better, such as having functional gestalts not need so many backslashes
+- 
+
+
+
+LONGTERML
 - Finish and debug rust interpreter 1.0
 - Add features to interpreter, such as better error messages and ensuring reasonable code (no lists in conditional primary args)
 - get a feel for the language while refining interpreter, as well as language syntax & semantics
