@@ -1,11 +1,12 @@
 1.0 ROADMAP
-- replace Abstract::Conditional with Abstract::Operator(b'?')
+- complete operator list
+    - Linear-Gestalt coercion
+    - Gestalt/Set access, appending, reduction
 - implement file reading and terminal access operators
 - implement comment functionality
-- finish operator completion/typecasting and general operator macro
-- sort out and refine code
+- sort out and refine code (helper functions/macros, cleanup, documentation)
 - implement comprehensive error messsages and QOL features
 - finish debugging and publish interpeter 1.0
 
 MISC PROJECTS:
-- write mathematical function library (trig, calc, constants, etc)
+- write mathematical function library (trig, calculus, constants, etc)

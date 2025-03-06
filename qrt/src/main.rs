@@ -50,10 +50,17 @@ impl Var {
 #[derive(Clone, Debug)]
 enum Abstract {
     Var(Var),     //Values
-    Control,      //Continue evaluation after actions
     Operator(u8), //Generic operators, also include "loops" that haven't been initialized yet.
-    Conditional,  //Special conditional operator, could honestly be replaced with Operator(b'?').
-    Loop(usize),  //Loops contains start of looping code, on "on"
+    Loop(usize),  //Loops are a special operator that require metadata pointing to their start location
+}
+
+//This macro should generate match code for unpacking variables of any type
+macro_rules! unpack_var {
+    ($type:expr,$abstract:expr) => {
+        {
+            if let Abstract::Var(v) {if let Var::$type()}
+        }
+    };
 }
 
 fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
@@ -594,6 +601,7 @@ fn unpack_linear(packed: &Abstract) -> Option<f64> {
 }
 
 fn unpack_gestalt(packed: &Abstract) -> Option<Vec<u8>> {
+
     match packed {
         Abstract::Var(v) => match v {
             Var::Gestalt(b) => Some(b.clone()),
