@@ -534,31 +534,26 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                     //In this case, its not an operator, so it must be a loop
                     None => {
-                        match stack.get(2).unwrap() {
+                        if let Abstract::Loop(start) = stack.get(2).unwrap() {
+                            let start = *start;
+                            
+                            //If the evaluation of the secondary argument is gestalt equal to the first,
+                            //Then the loop is terminated.
+                            if unpack_gestalt(stack.front().unwrap()).unwrap()
+                                == unpack_gestalt(stack.get(1).unwrap()).unwrap()
+                            {
+                                //removes the whole of the loop code and moves forward
+                                stack.pop_front();
+                                stack.pop_front();
+                                stack.pop_front();
 
-                            Abstract::Loop(start) => {
-                                let start = *start;
-                                
-                                //If the evaluation of the secondary argument is gestalt equal to the first,
-                                //Then the loop is terminated.
-                                if unpack_gestalt(stack.front().unwrap()).unwrap()
-                                    == unpack_gestalt(stack.get(1).unwrap()).unwrap()
-                                {
-                                    //removes the whole of the loop code and moves forward
-                                    stack.pop_front();
-                                    stack.pop_front();
-                                    stack.pop_front();
+                                on += 1;
+                            } else {
+                                //removes the secondary argument and starts over at the loop's associated on value
+                                stack.pop_front();
 
-                                    on += 1;
-                                } else {
-                                    //removes the secondary argument and starts over at the loop's associated on value
-                                    stack.pop_front();
-
-                                    on = start;
-                                }
+                                on = start;
                             }
-
-                            _ => {}
                         }
                     }
                 }
