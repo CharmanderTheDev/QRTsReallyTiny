@@ -150,7 +150,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             b'{' => {
                 match stack.get(1).unwrap() {
                     Abstract::Conditional => {
-                        match unpack_linear(stack.get(0).unwrap()) {
+                        match unpack_linear(stack.front().unwrap()) {
                             Some(b) => {
                                 if b > 0.0 {
                                     on += 1;
@@ -208,12 +208,8 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                     None => true,
                 } {
                     //Adds variables to set in reverse order of q, maintaining original order
-                    match stack.pop_front().unwrap() {
-                        Abstract::Var(v) => {
-                            set.insert(0, v);
-                        }
-
-                        _ => {}
+                    if let Abstract::Var(v) = stack.pop_front().unwrap() {
+                        set.insert(0, v);
                     }
                 }
 
@@ -322,7 +318,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                                     )
                                     .unwrap()
                                     .to_string(),
-                                    match stack.get(0).unwrap() {
+                                    match stack.front().unwrap() {
                                         Abstract::Var(v) => v.clone(),
                                         _ => Var::Void,
                                     },
@@ -339,7 +335,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                             //Addition
                             b'+' => {
-                                let sum = unpack_linear(stack.get(0).unwrap()).unwrap()
+                                let sum = unpack_linear(stack.front().unwrap()).unwrap()
                                     + unpack_linear(stack.get(1).unwrap()).unwrap();
 
                                 stack.pop_front();
@@ -352,7 +348,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Subtraction
                             b'-' => {
                                 let difference = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    - unpack_linear(stack.get(0).unwrap()).unwrap();
+                                    - unpack_linear(stack.front().unwrap()).unwrap();
 
                                 stack.pop_front();
                                 stack.pop_front();
@@ -364,7 +360,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                             //Multiplication
                             b'*' => {
-                                let product = unpack_linear(stack.get(0).unwrap()).unwrap()
+                                let product = unpack_linear(stack.front().unwrap()).unwrap()
                                     * unpack_linear(stack.get(1).unwrap()).unwrap();
 
                                 stack.pop_front();
@@ -378,7 +374,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Division
                             b'/' => {
                                 let quotient = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    / unpack_linear(stack.get(0).unwrap()).unwrap();
+                                    / unpack_linear(stack.front().unwrap()).unwrap();
 
                                 stack.pop_front();
                                 stack.pop_front();
@@ -392,7 +388,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             b'^' => {
                                 let power = unpack_linear(stack.get(1).unwrap())
                                     .unwrap()
-                                    .powf(unpack_linear(stack.get(0).unwrap()).unwrap());
+                                    .powf(unpack_linear(stack.front().unwrap()).unwrap());
 
                                 stack.pop_front();
                                 stack.pop_front();
@@ -406,7 +402,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                             //And
                             b'&' => {
-                                let truth = unpack_bool(stack.get(0).unwrap()).unwrap()
+                                let truth = unpack_bool(stack.front().unwrap()).unwrap()
                                     && unpack_bool(stack.get(1).unwrap()).unwrap();
 
                                 stack.pop_front();
@@ -423,7 +419,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                             //Or
                             b'|' => {
-                                let truth = unpack_bool(stack.get(0).unwrap()).unwrap()
+                                let truth = unpack_bool(stack.front().unwrap()).unwrap()
                                     || unpack_bool(stack.get(1).unwrap()).unwrap();
 
                                 stack.pop_front();
@@ -443,7 +439,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Greater than
                             b'>' => {
                                 let truth = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    > unpack_linear(stack.get(0).unwrap()).unwrap();
+                                    > unpack_linear(stack.front().unwrap()).unwrap();
 
                                 stack.pop_front();
                                 stack.pop_front();
@@ -460,7 +456,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Equal to
                             b'=' => {
                                 let truth = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    == unpack_linear(stack.get(0).unwrap()).unwrap();
+                                    == unpack_linear(stack.front().unwrap()).unwrap();
 
                                 stack.pop_front();
                                 stack.pop_front();
@@ -477,7 +473,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Less than
                             b'<' => {
                                 let truth = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    < unpack_linear(stack.get(0).unwrap()).unwrap();
+                                    < unpack_linear(stack.front().unwrap()).unwrap();
 
                                 stack.pop_front();
                                 stack.pop_front();
@@ -497,8 +493,8 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             b'!' => {
                                 let eva = evaluate(
                                     &unpack_gestalt(stack.get(1).unwrap()).unwrap(),
-                                    match stack.get(0).unwrap() {
-                                        Abstract::Var(v) => &v,
+                                    match stack.front().unwrap() {
+                                        Abstract::Var(v) => v,
                                         _ => &Var::Void,
                                     },
                                 );
@@ -543,10 +539,10 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             }
 
                             Abstract::Loop(start) => {
-                                let start = start.clone();
+                                let start = *start;
                                 //If the evaluation of the secondary argument is gestalt equal to the first,
                                 //Then the loop is terminated.
-                                if &unpack_gestalt(stack.get(0).unwrap()).unwrap()
+                                if &unpack_gestalt(stack.front().unwrap()).unwrap()
                                     == &unpack_gestalt(stack.get(1).unwrap()).unwrap()
                                 {
                                     //removes the whole of the loop code and moves forward
@@ -592,7 +588,7 @@ fn operate<Atype, Btype, Outtype>(
 }
 
 fn unpack_linear(packed: &Abstract) -> Option<f64> {
-    return match packed {
+    match packed {
         Abstract::Var(v) => match v {
             Var::Linear(b) => Some(*b),
 
@@ -600,25 +596,25 @@ fn unpack_linear(packed: &Abstract) -> Option<f64> {
         },
 
         _ => None,
-    };
+    }
 }
 
 fn unpack_gestalt(packed: &Abstract) -> Option<Vec<u8>> {
-    return match packed {
+    match packed {
         Abstract::Var(v) => match v {
             Var::Gestalt(b) => Some(b.clone()),
 
             _ => None,
         },
         _ => None,
-    };
+    }
 }
 
 fn unpack_operator(packed: &Abstract) -> Option<u8> {
-    return match packed {
+    match packed {
         Abstract::Operator(o) => Some(*o),
         _ => None,
-    };
+    }
 }
 
 fn unpack_bool(packed: &Abstract) -> Option<bool> {
@@ -630,14 +626,14 @@ fn unpack_bool(packed: &Abstract) -> Option<bool> {
 }
 
 fn unpack_set(packed: &Abstract) -> Option<&Vec<Var>> {
-    return match packed {
+    match packed {
         Abstract::Var(v) => match v {
-            Var::Set(s) => Some(&s),
+            Var::Set(s) => Some(s),
 
             _ => None,
         },
         _ => None,
-    };
+    }
 }
 
 //Helper function, used to find the end of secondary args. Expects to start the character directly after the first bracket.
@@ -665,10 +661,8 @@ fn find_bracket_pair(program: &Vec<u8>, mut on: usize) -> usize {
             b'"' => {
                 if !gestalt {
                     gestalt = true;
-                } else {
-                    if !escape {
-                        gestalt = false;
-                    }
+                } else if !escape {
+                    gestalt = false;
                 }
             }
 
