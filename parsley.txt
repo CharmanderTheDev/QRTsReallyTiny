@@ -1,6 +1,4 @@
 IMMEDIATE:
-- change alias referencing and assignment to not use gestalt (quotes)
-- add in specific function definition operator
 - implement file reading and terminal access operators
 - implement comment functionality
 - finish operator completion/typecasting and general operator macro
