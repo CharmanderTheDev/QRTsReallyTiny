@@ -52,8 +52,8 @@ enum Abstract {
     Var(Var),     //Values
     Control,      //Continue evaluation after actions
     Operator(u8), //Generic operators, also include "loops" that haven't been initialized yet.
-    Conditional,
-    Loop(usize), //Loops contains start of looping code, on "on"
+    Conditional,  //Special conditional operator, could honestly be replaced with Operator(b'?').
+    Loop(usize),  //Loops contains start of looping code, on "on"
 }
 
 fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
@@ -149,22 +149,6 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             //Also checks for function definitions, adds the given name to the function map and moves past the interior code
             b'{' => {
                 match stack.get(1).unwrap() {
-                    Abstract::Conditional => {
-                        match unpack_linear(stack.front().unwrap()) {
-                            Some(b) => {
-                                if b > 0.0 {
-                                    on += 1;
-                                } else {
-                                    on = find_bracket_pair(program, on + 1);
-                                    stack.pop_front();
-                                    stack.pop_front(); /*pops conditional and condition*/
-                                }
-                            }
-                            None => {
-                                panic!("conditional was given nonlinear argument")
-                            }
-                        }
-                    }
 
                     Abstract::Operator(o) => {
                         if o == &b'~' {
@@ -181,6 +165,23 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //pushes on complete loop with correct beginning, and the killid
                             stack.push_front(Abstract::Loop(on + 1));
                             stack.push_front(Abstract::Var(killid));
+                        }
+
+                        else if o == &b'?' {
+                            match unpack_linear(stack.front().unwrap()) {
+                                Some(b) => {
+                                    if b > 0.0 {
+                                        on += 1;
+                                    } else {
+                                        on = find_bracket_pair(program, on + 1);
+                                        stack.pop_front();
+                                        stack.pop_front(); /*pops conditional and condition*/
+                                    }
+                                }
+                                None => {
+                                    panic!("conditional was given nonlinear argument")
+                                }
+                            }
                         }
 
                         on += 1;
@@ -271,12 +272,6 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                         .unwrap()
                         .clone(),
                 ));
-            }
-
-            //Special "conditional" operator
-            b'?' => {
-                stack.push_front(Abstract::Conditional);
-                on += 1;
             }
 
             //Terminator character, immediately matches top of stack to var and returns it, if its not a var then it returns void.
@@ -520,17 +515,9 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Function definition
                             b':' => {}
 
-                            //Invalid operator
-                            _ => {
-                                panic!("Invalid operator");
-                            }
-                        }
-                    }
+                            //Conditional
+                            b'?' => { 
 
-                    //In this case, its not an operator, so either a conditional or loop
-                    None => {
-                        match stack.get(2).unwrap() {
-                            Abstract::Conditional => {
                                 stack.pop_front();
                                 stack.pop_front();
                                 stack.pop_front();
@@ -538,12 +525,24 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                                 on += 1;
                             }
 
+                            //Invalid operator
+                            _ => {
+                                panic!("Invalid operator");
+                            }
+                        }
+                    }
+
+                    //In this case, its not an operator, so it must be a loop
+                    None => {
+                        match stack.get(2).unwrap() {
+
                             Abstract::Loop(start) => {
                                 let start = *start;
+                                
                                 //If the evaluation of the secondary argument is gestalt equal to the first,
                                 //Then the loop is terminated.
-                                if &unpack_gestalt(stack.front().unwrap()).unwrap()
-                                    == &unpack_gestalt(stack.get(1).unwrap()).unwrap()
+                                if unpack_gestalt(stack.front().unwrap()).unwrap()
+                                    == unpack_gestalt(stack.get(1).unwrap()).unwrap()
                                 {
                                     //removes the whole of the loop code and moves forward
                                     stack.pop_front();

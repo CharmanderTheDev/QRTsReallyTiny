@@ -1,15 +1,11 @@
-IMMEDIATE:
+1.0 ROADMAP
+- replace Abstract::Conditional with Abstract::Operator(b'?')
 - implement file reading and terminal access operators
 - implement comment functionality
 - finish operator completion/typecasting and general operator macro
+- sort out and refine code
+- implement comprehensive error messsages and QOL features
+- finish debugging and publish interpeter 1.0
 
-MISC:
+MISC PROJECTS:
 - write mathematical function library (trig, calc, constants, etc)
-
-LONGTERM:
-- Finish and debug rust interpreter 1.0
-- Add features to interpreter, such as better error messages and ensuring reasonable code (no lists in conditional primary args)
-- get a feel for the language while refining interpreter, as well as language syntax & semantics
-- write a compiler (probably to c then to .exe) for qrt
-- rewrite compiler IN qrt, and bask in glory
-- make a good IDE for qrt
