@@ -96,6 +96,33 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
         }};
     }
 
+    //This macro should generated a type match statements for multiple operation variations.
+    //This is one of my most favoritest pieces of code I've written
+    macro_rules! multi_operate {
+        ( $( ($vartypea:tt, $vartypeb:tt, $outtype:tt $op:expr) ),*) => {{
+            match (stack.get(1).unwrap(), stack.front().unwrap()) {
+
+                (Abstract::Var(Var::Void), _) | (_, Abstract::Var(Var::Void)) => {
+                    clear_and_progress!();
+
+                    stack.push_front(Abstract::Var(Var::Void));
+                }
+
+                $(
+                    (Abstract::Var(Var::$vartypea(_)), Abstract::Var(Var::$vartypeb(_))) => {
+                        operate!($vartypea, $vartypeb, $outtype$op)
+                    }
+                )*
+
+                _ => panic!("Incorrect variable types provided at {}: {:?}, {:?}",
+                            on,
+                            stack.front().unwrap(),
+                            stack.get(1).unwrap()
+                        )
+            }
+        }};
+    }
+
     loop {
         //print!("{}", program[on] as char);
 
@@ -342,76 +369,140 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                             //Addition
                             b'+' => {
-                                operate!(Linear, Linear, Linear(|a: f64, b: f64| -> f64 { a + b }));
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {a + b}),
+
+                                    (Linear, Gestalt, Linear|a: f64, b: Vec<u8>| -> f64 {
+                                        a + String::from_utf8(b).unwrap().parse::<f64>().unwrap()
+                                    }),
+
+                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Vec<u8> {
+                                        (String::from_utf8(a).unwrap() + &format!("{}", b)).into()
+                                    }),
+
+                                    (Gestalt, Gestalt, Gestalt|a: Vec<u8>, b: Vec<u8>| -> Vec<u8> {
+                                        (String::from_utf8(a).unwrap() + &String::from_utf8(b).unwrap()).into()
+                                    }),
+
+                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Vec<Var> {
+                                        let mut newset = a.clone();
+                                        newset.push(Var::Linear(b));
+                                        newset
+                                    }),
+
+                                    (Set, Gestalt, Set|a: Vec<Var>, b: Vec<u8>| -> Vec<Var> {
+                                        let mut newset = a.clone();
+                                        newset.push(Var::Gestalt(b));
+                                        newset
+                                    })
+                                );
                             }
                             //Subtraction
                             b'-' => {
-                                operate!(Linear, Linear, Linear(|a: f64, b: f64| -> f64 { a - b }));
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b:f64| -> f64 {a - b}),
+
+                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Vec<u8> {
+                                        let mut newges = a.clone();
+                                        newges.remove(b as i64 as usize);
+                                        newges
+                                    }),
+
+                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Vec<Var> {
+                                        let mut newset = a.clone();
+                                        newset.remove(b as i64 as usize);
+                                        newset
+                                    })
+                                )
                             }
                             //Multiplication
                             b'*' => {
-                                operate!(Linear, Linear, Linear(|a: f64, b: f64| -> f64 { a * b }));
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {a * b})
+                                )
                             }
                             //Division
                             b'/' => {
-                                operate!(Linear, Linear, Linear(|a: f64, b: f64| -> f64 { a / b }));
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {a / b})
+                                )
                             }
                             //Exponentiation
                             b'^' => {
-                                operate!(
-                                    Linear,
-                                    Linear,
-                                    Linear(|a: f64, b: f64| -> f64 { a.powf(b) })
-                                );
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {a.powf(b)})
+                                )
                             }
 
                             //LOGICAL
 
                             //And
                             b'&' => {
-                                operate!(
-                                    Linear,
-                                    Linear,
-                                    Linear(|a: f64, b: f64| -> f64 {
-                                        booltolin(lintobool(a) && lintobool(b))
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
+                                        if a > 0.0 && b > 0.0 {1.0} else {0.0}
                                     })
+
+
                                 )
                             }
                             //Or
                             b'|' => {
-                                operate!(
-                                    Linear,
-                                    Linear,
-                                    Linear(|a: f64, b: f64| -> f64 {
-                                        booltolin(lintobool(a) || lintobool(b))
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
+                                        if a > 0.0 || b > 0.0 {1.0} else {0.0}
                                     })
                                 )
                             }
 
                             //COMPARISON
 
-                            //Greater than
-                            b'>' => {
-                                operate!(
-                                    Linear,
-                                    Linear,
-                                    Linear(|a: f64, b: f64| -> f64 { booltolin(a > b) })
-                                )
-                            }
                             //Equal to
                             b'=' => {
-                                operate!(
-                                    Linear,
-                                    Linear,
-                                    Linear(|a: f64, b: f64| -> f64 { booltolin(a == b) })
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
+                                        if a == b {1.0} else {0.0}
+                                    }),
+
+                                    (Gestalt, Gestalt, Linear|a: Vec<u8>, b: Vec<u8>| -> f64 {
+                                        if a == b {1.0} else {0.0}
+                                    })
+                                )
+                            }
+                            //Greater than
+                            b'>' => {
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
+                                        if a > b {1.0} else {0.0}
+                                    }),
+
+                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Vec<u8> {
+                                        let mut newges = a.clone();
+                                        newges.truncate(a.len() - b as i64 as usize);
+                                        newges
+                                    }),
+
+                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Vec<Var> {
+                                        let mut newset = a.clone();
+                                        newset.truncate(a.len() - b as i64 as usize);
+                                        newset
+                                    })
                                 )
                             }
                             //Less than
                             b'<' => {
-                                operate!(
-                                    Linear,
-                                    Linear,
-                                    Linear(|a: f64, b: f64| -> f64 { booltolin(a < b) })
+                                multi_operate!(
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
+                                        if a < b {1.0} else {0.0}
+                                    }),
+
+                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Vec<u8> {
+                                        a[b as i64 as usize..].to_vec()
+                                    }),
+
+                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Vec<Var> {
+                                        a[b as i64 as usize..].to_vec()
+                                    })
                                 )
                             }
 
@@ -433,18 +524,35 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             }
                             //Reading/writing files
                             b'@' => {}
-                            //Set access
+                            //Set access, macro can't cover these subtypeless sets so its got its own special thingy
                             b'`' => {
-                                let index: f64 = unpack_var!(Linear, stack.front().unwrap());
 
-                                let element: Var = unpack_var!(Set, stack.get(1).unwrap())
-                                    .get(index as i64 as usize)
-                                    .unwrap()
-                                    .clone();
+                                match (stack.get(1).unwrap(), stack.front().unwrap()) {
 
-                                clear_and_progress!();
+                                    (Abstract::Var(Var::Set(s)), Abstract::Var(Var::Linear(l))) => {
 
-                                stack.push_front(Abstract::Var(element));
+                                        let element = Abstract::Var(s.get(*l as i64 as usize).unwrap().clone());
+
+                                        clear_and_progress!();
+
+                                        stack.push_front(element);
+                                    }
+
+                                    (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Linear(l))) => {
+
+                                        let char = g[*l as i64 as usize];
+
+                                        clear_and_progress!();
+
+                                        stack.push_front(Abstract::Var(Var::Gestalt(vec!(char))));
+                                    }
+
+                                    _ => panic!("Incorrect variable types provided at {}: {:?}, {:?}",
+                                                on,
+                                                stack.front().unwrap(),
+                                                stack.get(1).unwrap()
+                                            )
+                                }
                             }
                             //terminal access
                             b'\'' => {}
