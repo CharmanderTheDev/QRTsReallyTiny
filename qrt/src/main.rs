@@ -54,15 +54,6 @@ enum Abstract {
     Loop(usize),  //Loops are a special operator that require metadata pointing to their start location
 }
 
-//This macro should generate match code for unpacking variables of any type
-macro_rules! unpack_var {
-    ($type:expr,$abstract:expr) => {
-        {
-            if let Abstract::Var(v) {if let Var::$type()}
-        }
-    };
-}
-
 fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
@@ -70,10 +61,53 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
     let mut on = 0;
 
+    //This macro should generate match code for unpacking variables of any type
+    macro_rules! unpack_var {
+        ($vartype:tt, $abs:expr) => {
+            {
+                if let Abstract::Var(v) = $abs {
+                    if let Var::$vartype(x) = v {x.clone()} 
+                    
+                    else {panic!("test")}
+                } else {panic!("test")}
+            }
+        };
+    }
+
+    macro_rules! clear_and_progress {
+        () => {
+            stack.pop_front();
+            stack.pop_front();
+            stack.pop_front();
+
+            on+=1;
+        }
+    }
+
+    //This macro should generate code for the general operation case
+    macro_rules! operate {
+        ($atype:tt, $btype:tt, $restype:tt $operation:expr) => {
+            {
+                let result = $operation(
+                    unpack_var!($atype, stack.get(1).unwrap()),
+                    unpack_var!($btype, stack.get(0).unwrap())
+                );
+
+                clear_and_progress!();
+
+                stack.push_front(Abstract::Var(Var::$restype(result)));
+            }
+        }
+    }
+    
     loop {
+
+        //print!("{}", program[on] as char);
+
         match program[on] {
-            //Uncaught whitespace
-            10 | 32 => {
+
+            //Uncaught whitespace, new line, carriage return, and space respectively.
+            10 | 13 | 32 => {
                 on += 1;
             }
 
@@ -140,12 +174,6 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                 stack.push_front(Abstract::Var(Var::Gestalt(gestalt)));
             }
 
-            //Set literal begin
-            b'[' => {
-                on += 1;
-                stack.push_front(Abstract::Operator(b'['));
-            }
-
             //Set literal continuation
             b',' => {
                 on += 1;
@@ -175,19 +203,12 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                         }
 
                         else if o == &b'?' {
-                            match unpack_linear(stack.front().unwrap()) {
-                                Some(b) => {
-                                    if b > 0.0 {
-                                        on += 1;
-                                    } else {
-                                        on = find_bracket_pair(program, on + 1);
-                                        stack.pop_front();
-                                        stack.pop_front(); /*pops conditional and condition*/
-                                    }
-                                }
-                                None => {
-                                    panic!("conditional was given nonlinear argument")
-                                }
+                            if unpack_var!(Linear, stack.front().unwrap()) > 0.0 {
+                                on += 1;
+                            } else {
+                                on = find_bracket_pair(program, on + 1);
+                                stack.pop_front();
+                                stack.pop_front(); /*pops conditional and condition*/
                             }
                         }
 
@@ -213,7 +234,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                         },
                         _ => true,
                     },
-                    None => true,
+                    _ => true,
                 } {
                     //Adds variables to set in reverse order of q, maintaining original order
                     if let Abstract::Var(v) = stack.pop_front().unwrap() {
@@ -289,23 +310,15 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                         _ => Var::Void,
                     },
 
-                    None => Var::Void,
+                    _ => Var::Void,
                 }
             }
 
             //Comments
             b'\\' => {}
 
-            //evaluates a ton of "normal" operators (artithmetic, boolean, comparison, etc.)
-            //Should also handle loop recursion, and termination if secondary variable has
-            //evaluated to the relevant kill. Should contain recursive function evaluation
-            //capabilities. Should handle environmental terminal calls ("unlimited functionality, apostrophe operator")
-            //
+            //evaluates essentially all operators
             b'}' => {
-                //Current problem: when reaching the closing bracket of a successful conditional,
-                //Is unable to find stack.get(2), due to the internal code of the conditional
-                //Not actually returning a value and instead being a control function.
-                //Possible solution, implement the control type or return a null.
 
                 match unpack_operator(stack.get(2).unwrap()) {
                     Some(a) => {
@@ -316,7 +329,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             b'#' => {
                                 map.insert(
                                     String::from_utf8(
-                                        unpack_gestalt(stack.get(1).unwrap()).unwrap(),
+                                        unpack_var!(Gestalt, stack.get(1).unwrap()),
                                     )
                                     .unwrap()
                                     .to_string(),
@@ -326,167 +339,76 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                                     },
                                 );
 
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-
-                                on += 1;
+                                clear_and_progress!();
                             }
 
                             //ARTITHMETIC
 
                             //Addition
                             b'+' => {
-                                let sum = unpack_linear(stack.front().unwrap()).unwrap()
-                                    + unpack_linear(stack.get(1).unwrap()).unwrap();
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(sum)));
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a+b}));
                             }
                             //Subtraction
                             b'-' => {
-                                let difference = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    - unpack_linear(stack.front().unwrap()).unwrap();
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(difference)));
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a-b}));
                             }
-
                             //Multiplication
                             b'*' => {
-                                let product = unpack_linear(stack.front().unwrap()).unwrap()
-                                    * unpack_linear(stack.get(1).unwrap()).unwrap();
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(product)));
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a*b}));
                             }
-
                             //Division
                             b'/' => {
-                                let quotient = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    / unpack_linear(stack.front().unwrap()).unwrap();
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(quotient)));
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a/b}));
                             }
-
                             //Exponentiation
                             b'^' => {
-                                let power = unpack_linear(stack.get(1).unwrap())
-                                    .unwrap()
-                                    .powf(unpack_linear(stack.front().unwrap()).unwrap());
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(power)));
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a.powf(b)}));
                             }
 
                             //LOGICAL
 
                             //And
                             b'&' => {
-                                let truth = unpack_bool(stack.front().unwrap()).unwrap()
-                                    && unpack_bool(stack.get(1).unwrap()).unwrap();
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(if truth {
-                                    1.0
-                                } else {
-                                    0.0
-                                })))
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
+                                    booltolin(
+                                        lintobool(a) && lintobool(b)
+                                    )
+                                }))
                             }
-
                             //Or
                             b'|' => {
-                                let truth = unpack_bool(stack.front().unwrap()).unwrap()
-                                    || unpack_bool(stack.get(1).unwrap()).unwrap();
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(if truth {
-                                    1.0
-                                } else {
-                                    0.0
-                                })))
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
+                                    booltolin(
+                                        lintobool(a) || lintobool(b)
+                                    )
+                                }))
                             }
 
                             //COMPARISON
 
                             //Greater than
                             b'>' => {
-                                let truth = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    > unpack_linear(stack.front().unwrap()).unwrap();
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(if truth {
-                                    1.0
-                                } else {
-                                    0.0
-                                })))
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
+                                    booltolin(
+                                        a > b
+                                    )
+                                }))
                             }
-
                             //Equal to
                             b'=' => {
-                                let truth = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    == unpack_linear(stack.front().unwrap()).unwrap();
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(if truth {
-                                    1.0
-                                } else {
-                                    0.0
-                                })))
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
+                                    booltolin(
+                                        a == b
+                                    )
+                                }))
                             }
-
                             //Less than
                             b'<' => {
-                                let truth = unpack_linear(stack.get(1).unwrap()).unwrap()
-                                    < unpack_linear(stack.front().unwrap()).unwrap();
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-                                on += 1;
-
-                                stack.push_front(Abstract::Var(Var::Linear(if truth {
-                                    1.0
-                                } else {
-                                    0.0
-                                })))
+                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
+                                    booltolin(
+                                        a < b
+                                    )
+                                }))
                             }
 
                             //MISC
@@ -494,67 +416,49 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Evaluation
                             b'!' => {
                                 let eva = evaluate(
-                                    &unpack_gestalt(stack.get(1).unwrap()).unwrap(),
+                                    &unpack_var!(Gestalt, stack.get(1).unwrap()),
                                     match stack.front().unwrap() {
-                                        Abstract::Var(v) => v,
+                                        Abstract::Var(v) => &v,
                                         _ => &Var::Void,
                                     },
                                 );
 
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
+                                clear_and_progress!();
 
                                 stack.push_front(Abstract::Var(eva));
-
-                                on += 1;
                             }
-
                             //Reading/writing files
                             b'@' => {}
-
                             //Set access
                             b'`' => {}
-
                             //terminal access
                             b'\'' => {}
-
                             //Function definition
                             b':' => {}
-
                             //Conditional
                             b'?' => { 
-
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-
-                                on += 1;
+                                clear_and_progress!();
                             }
 
                             //Invalid operator
                             _ => {
-                                panic!("Invalid operator");
+                                panic!("Invalid operator \"{}\"", a as char);
                             }
                         }
                     }
 
                     //In this case, its not an operator, so it must be a loop
-                    None => {
+                    _ => {
                         if let Abstract::Loop(start) = stack.get(2).unwrap() {
                             let start = *start;
                             
                             //If the evaluation of the secondary argument is gestalt equal to the first,
                             //Then the loop is terminated.
-                            if unpack_gestalt(stack.front().unwrap()).unwrap()
-                                == unpack_gestalt(stack.get(1).unwrap()).unwrap()
+                            if unpack_var!(Gestalt, stack.front().unwrap())
+                                == unpack_var!(Gestalt, stack.get(1).unwrap())
                             {
                                 //removes the whole of the loop code and moves forward
-                                stack.pop_front();
-                                stack.pop_front();
-                                stack.pop_front();
-
-                                on += 1;
+                                clear_and_progress!();
                             } else {
                                 //removes the secondary argument and starts over at the loop's associated on value
                                 stack.pop_front();
@@ -577,39 +481,12 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
     }
 }
 
-//Removes comments and whitespace
-fn compile(program: &Vec<u8>) {}
-
-fn operate<Atype, Btype, Outtype>(
-    arg1: Atype,
-    arg2: Btype,
-    func: fn(Atype, Btype) -> Outtype,
-    stack: VecDeque<Abstract>,
-) {
+fn lintobool(linear: f64) -> bool {
+    if linear>0.0 {true}else{false}
 }
 
-fn unpack_linear(packed: &Abstract) -> Option<f64> {
-    match packed {
-        Abstract::Var(v) => match v {
-            Var::Linear(b) => Some(*b),
-
-            _ => None,
-        },
-
-        _ => None,
-    }
-}
-
-fn unpack_gestalt(packed: &Abstract) -> Option<Vec<u8>> {
-
-    match packed {
-        Abstract::Var(v) => match v {
-            Var::Gestalt(b) => Some(b.clone()),
-
-            _ => None,
-        },
-        _ => None,
-    }
+fn booltolin(boolean: bool) -> f64 {
+    if boolean {1.0} else {0.0}
 }
 
 fn unpack_operator(packed: &Abstract) -> Option<u8> {
@@ -619,24 +496,6 @@ fn unpack_operator(packed: &Abstract) -> Option<u8> {
     }
 }
 
-fn unpack_bool(packed: &Abstract) -> Option<bool> {
-    match packed {
-        Abstract::Var(v) => Some(v.bool()),
-
-        _ => None,
-    }
-}
-
-fn unpack_set(packed: &Abstract) -> Option<&Vec<Var>> {
-    match packed {
-        Abstract::Var(v) => match v {
-            Var::Set(s) => Some(s),
-
-            _ => None,
-        },
-        _ => None,
-    }
-}
 
 //Helper function, used to find the end of secondary args. Expects to start the character directly after the first bracket.
 //Returns the position directly after the pairing bracket.
