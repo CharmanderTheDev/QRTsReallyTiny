@@ -434,7 +434,18 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Reading/writing files
                             b'@' => {}
                             //Set access
-                            b'`' => {}
+                            b'`' => {
+                                let index: f64 = unpack_var!(Linear, stack.front().unwrap());
+
+                                let element: Var = unpack_var!(Set, stack.get(1).unwrap())
+                                    .get(index as i64 as usize)
+                                    .unwrap()
+                                    .clone();
+
+                                clear_and_progress!();
+
+                                stack.push_front(Abstract::Var(element));
+                            }
                             //terminal access
                             b'\'' => {}
                             //Conditional
