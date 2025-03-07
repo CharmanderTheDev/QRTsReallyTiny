@@ -307,13 +307,13 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
             //Comments
             b'\\' => {
-                on+=1;
+                on += 1;
 
                 while program[on] != b'\\' {
-                    on+=1;
+                    on += 1;
                 }
 
-                on+=1;
+                on += 1;
             }
 
             //evaluates essentially all operators
