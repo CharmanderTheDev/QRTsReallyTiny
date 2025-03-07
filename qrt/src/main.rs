@@ -433,8 +433,6 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             b'`' => {}
                             //terminal access
                             b'\'' => {}
-                            //Function definition
-                            b':' => {}
                             //Conditional
                             b'?' => { 
                                 clear_and_progress!();
