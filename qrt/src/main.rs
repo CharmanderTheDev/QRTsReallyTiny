@@ -51,7 +51,7 @@ impl Var {
 enum Abstract {
     Var(Var),     //Values
     Operator(u8), //Generic operators, also include "loops" that haven't been initialized yet.
-    Loop(usize),  //Loops are a special operator that require metadata pointing to their start location
+    Loop(usize), //Loops are a special operator that require metadata pointing to their start location
 }
 
 fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
@@ -63,15 +63,13 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
     //This macro should generate match code for unpacking variables of any type
     macro_rules! unpack_var {
-        ($vartype:tt, $abs:expr) => {
-            {
-                if let Abstract::Var(v) = $abs {
-                    if let Var::$vartype(x) = v {x.clone()} 
-                    
-                    else {panic!("test")}
-                } else {panic!("test")}
+        ($vartype:tt, $abs:expr) => {{
+            if let Abstract::Var(Var::$vartype(x)) = $abs {
+                x.clone()
+            } else {
+                panic!("Attempted to unpack incorrect variable type")
             }
-        };
+        }};
     }
 
     macro_rules! clear_and_progress {
@@ -80,32 +78,28 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             stack.pop_front();
             stack.pop_front();
 
-            on+=1;
-        }
+            on += 1;
+        };
     }
 
     //This macro should generate code for the general operation case
     macro_rules! operate {
-        ($atype:tt, $btype:tt, $restype:tt $operation:expr) => {
-            {
-                let result = $operation(
-                    unpack_var!($atype, stack.get(1).unwrap()),
-                    unpack_var!($btype, stack.get(0).unwrap())
-                );
+        ($atype:tt, $btype:tt, $restype:tt $operation:expr) => {{
+            let result = $operation(
+                unpack_var!($atype, stack.get(1).unwrap()),
+                unpack_var!($btype, stack.get(0).unwrap()),
+            );
 
-                clear_and_progress!();
+            clear_and_progress!();
 
-                stack.push_front(Abstract::Var(Var::$restype(result)));
-            }
-        }
+            stack.push_front(Abstract::Var(Var::$restype(result)));
+        }};
     }
-    
-    loop {
 
+    loop {
         //print!("{}", program[on] as char);
 
         match program[on] {
-
             //Uncaught whitespace, new line, carriage return, and space respectively.
             10 | 13 | 32 => {
                 on += 1;
@@ -184,7 +178,6 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             //Also checks for function definitions, adds the given name to the function map and moves past the interior code
             b'{' => {
                 match stack.get(1).unwrap() {
-
                     Abstract::Operator(o) => {
                         if o == &b'~' {
                             //convert latest value to a killid for the matured loop
@@ -200,9 +193,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //pushes on complete loop with correct beginning, and the killid
                             stack.push_front(Abstract::Loop(on + 1));
                             stack.push_front(Abstract::Var(killid));
-                        }
-
-                        else if o == &b'?' {
+                        } else if o == &b'?' {
                             if unpack_var!(Linear, stack.front().unwrap()) > 0.0 {
                                 on += 1;
                             } else {
@@ -315,11 +306,18 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             }
 
             //Comments
-            b'\\' => {}
+            b'\\' => {
+                on+=1;
+
+                while program[on] != b'\\' {
+                    on+=1;
+                }
+
+                on+=1;
+            }
 
             //evaluates essentially all operators
             b'}' => {
-
                 match unpack_operator(stack.get(2).unwrap()) {
                     Some(a) => {
                         match a {
@@ -328,11 +326,9 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Alias assignment
                             b'#' => {
                                 map.insert(
-                                    String::from_utf8(
-                                        unpack_var!(Gestalt, stack.get(1).unwrap()),
-                                    )
-                                    .unwrap()
-                                    .to_string(),
+                                    String::from_utf8(unpack_var!(Gestalt, stack.get(1).unwrap()))
+                                        .unwrap()
+                                        .to_string(),
                                     match stack.front().unwrap() {
                                         Abstract::Var(v) => v.clone(),
                                         _ => Var::Void,
@@ -346,69 +342,77 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                             //Addition
                             b'+' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a+b}));
+                                operate!(Linear, Linear, Linear(|a: f64, b: f64| -> f64 { a + b }));
                             }
                             //Subtraction
                             b'-' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a-b}));
+                                operate!(Linear, Linear, Linear(|a: f64, b: f64| -> f64 { a - b }));
                             }
                             //Multiplication
                             b'*' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a*b}));
+                                operate!(Linear, Linear, Linear(|a: f64, b: f64| -> f64 { a * b }));
                             }
                             //Division
                             b'/' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a/b}));
+                                operate!(Linear, Linear, Linear(|a: f64, b: f64| -> f64 { a / b }));
                             }
                             //Exponentiation
                             b'^' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{a.powf(b)}));
+                                operate!(
+                                    Linear,
+                                    Linear,
+                                    Linear(|a: f64, b: f64| -> f64 { a.powf(b) })
+                                );
                             }
 
                             //LOGICAL
 
                             //And
                             b'&' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
-                                    booltolin(
-                                        lintobool(a) && lintobool(b)
-                                    )
-                                }))
+                                operate!(
+                                    Linear,
+                                    Linear,
+                                    Linear(|a: f64, b: f64| -> f64 {
+                                        booltolin(lintobool(a) && lintobool(b))
+                                    })
+                                )
                             }
                             //Or
                             b'|' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
-                                    booltolin(
-                                        lintobool(a) || lintobool(b)
-                                    )
-                                }))
+                                operate!(
+                                    Linear,
+                                    Linear,
+                                    Linear(|a: f64, b: f64| -> f64 {
+                                        booltolin(lintobool(a) || lintobool(b))
+                                    })
+                                )
                             }
 
                             //COMPARISON
 
                             //Greater than
                             b'>' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
-                                    booltolin(
-                                        a > b
-                                    )
-                                }))
+                                operate!(
+                                    Linear,
+                                    Linear,
+                                    Linear(|a: f64, b: f64| -> f64 { booltolin(a > b) })
+                                )
                             }
                             //Equal to
                             b'=' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
-                                    booltolin(
-                                        a == b
-                                    )
-                                }))
+                                operate!(
+                                    Linear,
+                                    Linear,
+                                    Linear(|a: f64, b: f64| -> f64 { booltolin(a == b) })
+                                )
                             }
                             //Less than
                             b'<' => {
-                                operate!(Linear, Linear, Linear (|a:f64, b:f64| -> f64{
-                                    booltolin(
-                                        a < b
-                                    )
-                                }))
+                                operate!(
+                                    Linear,
+                                    Linear,
+                                    Linear(|a: f64, b: f64| -> f64 { booltolin(a < b) })
+                                )
                             }
 
                             //MISC
@@ -434,7 +438,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //terminal access
                             b'\'' => {}
                             //Conditional
-                            b'?' => { 
+                            b'?' => {
                                 clear_and_progress!();
                             }
 
@@ -449,7 +453,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                     _ => {
                         if let Abstract::Loop(start) = stack.get(2).unwrap() {
                             let start = *start;
-                            
+
                             //If the evaluation of the secondary argument is gestalt equal to the first,
                             //Then the loop is terminated.
                             if unpack_var!(Gestalt, stack.front().unwrap())
@@ -480,11 +484,19 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 }
 
 fn lintobool(linear: f64) -> bool {
-    if linear>0.0 {true}else{false}
+    if linear > 0.0 {
+        true
+    } else {
+        false
+    }
 }
 
 fn booltolin(boolean: bool) -> f64 {
-    if boolean {1.0} else {0.0}
+    if boolean {
+        1.0
+    } else {
+        0.0
+    }
 }
 
 fn unpack_operator(packed: &Abstract) -> Option<u8> {
@@ -493,7 +505,6 @@ fn unpack_operator(packed: &Abstract) -> Option<u8> {
         _ => None,
     }
 }
-
 
 //Helper function, used to find the end of secondary args. Expects to start the character directly after the first bracket.
 //Returns the position directly after the pairing bracket.

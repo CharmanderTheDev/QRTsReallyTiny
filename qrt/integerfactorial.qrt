@@ -2,6 +2,7 @@
 #"m"{$}
 #"k"{"live"}
 
+\This is the iterated multiplication loop\
 ~"k"{
     ?=("m"){0}{
         ("t");
