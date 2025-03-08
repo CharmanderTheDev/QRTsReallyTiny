@@ -500,7 +500,52 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
                                 stack.push_front(Abstract::Var(eva));
                             }
                             //Reading/writing files
-                            b'@' => {}
+                            b'@' => match (stack.get(1).unwrap(), stack.front().unwrap()) {
+                                (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void)) => {
+                                    let file: Vec<u8> =
+                                        fs::read_to_string(String::from_utf8(g.to_vec()).unwrap())
+                                            .expect("No such file found")
+                                            .as_bytes()
+                                            .into();
+
+                                    clear_and_progress!();
+
+                                    stack.push_front(Abstract::Var(Var::Gestalt(file)));
+                                }
+
+                                (
+                                    Abstract::Var(Var::Gestalt(ga)),
+                                    Abstract::Var(Var::Gestalt(gb)),
+                                ) => {
+                                    let file: Vec<u8> =
+                                        fs::read_to_string(String::from_utf8(ga.to_vec()).unwrap())
+                                            .expect(
+                                                &("No such file found at ".to_string()
+                                                    + &on.to_string()),
+                                            )
+                                            .as_bytes()
+                                            .into();
+
+                                    fs::write(
+                                        String::from_utf8(ga.to_vec()).unwrap(),
+                                        String::from_utf8(gb.to_vec()).unwrap(),
+                                    )
+                                    .expect(
+                                        &("Unable to write file at ".to_string() + &on.to_string()),
+                                    );
+
+                                    clear_and_progress!();
+
+                                    stack.push_front(Abstract::Var(Var::Gestalt(file)));
+                                }
+
+                                _ => panic!(
+                                    "Incorrect variable types provided at {}: {:?}, {:?}",
+                                    on,
+                                    stack.front().unwrap(),
+                                    stack.get(1).unwrap()
+                                ),
+                            },
                             //Set access, macro can't cover these subtypeless sets so its got its own special thingy
                             b'`' => match (stack.get(1).unwrap(), stack.front().unwrap()) {
                                 (Abstract::Var(Var::Set(s)), Abstract::Var(Var::Linear(l))) => {

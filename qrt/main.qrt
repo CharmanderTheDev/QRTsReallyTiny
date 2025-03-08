@@ -1,5 +1,0 @@
-#!multiply{
-    *${2};
-}
-
-!(multiply){4};
