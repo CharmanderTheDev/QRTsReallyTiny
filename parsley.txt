@@ -1,9 +1,0 @@
-1.0 ROADMAP
-- sort out and refine code
-    - sort helper functions into modules
-    - improve operation macro to reduce code repetition, replace entire b'}' match construct
-- implement comprehensive error messsages
-- finish debugging and publish interpeter 1.0
-
-MISC PROJECTS:
-- write mathematical function library (trig, calculus, constants, etc)

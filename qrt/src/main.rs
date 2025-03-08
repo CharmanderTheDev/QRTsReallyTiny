@@ -5,10 +5,13 @@ use std::{
     collections::{HashMap, VecDeque},
     env, fs,
     vec::Vec,
+    path::Path,
+    io::Read
 };
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+
 
     let file: Vec<u8> = fs::read_to_string(&args[1])
         .expect("No such file found")
@@ -16,9 +19,14 @@ fn main() {
         .as_bytes()
         .into();
 
-    let evaluation = evaluate(&file, &Var::Linear(5.0));
+    let input: Var = evaluate(
+        &String::into_bytes(args[2].clone()),
+        &Var::Void
+    );
 
-    println!("{:?}", evaluation);
+    let evaluation = evaluate(&file, &input);
+
+    //println!("{:?}", evaluation);
 }
 
 #[derive(Clone, Debug)]
@@ -99,7 +107,6 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
     }
 
     loop {
-        //print!("{}", program[on] as char); (debugging tool)
 
         match program[on] {
             //Uncaught whitespace, new line, carriage return, and space respectively.
@@ -299,7 +306,7 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
             }
 
             //Terminator character, immediately matches top of stack to var and returns it, if its not a var then it returns void.
-            b';' => {
+            b':' => {
                 return match stack.pop_front() {
                     Some(Abstract::Var(v)) => v,
 
@@ -536,14 +543,25 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
                                     Abstract::Var(Var::Gestalt(ga)),
                                     Abstract::Var(Var::Gestalt(gb)),
                                 ) => {
-                                    let file: Vec<u8> =
-                                        fs::read_to_string(String::from_utf8(ga.to_vec()).unwrap())
-                                            .expect(
-                                                &("No such file found at ".to_string()
-                                                    + &on.to_string()),
-                                            )
-                                            .as_bytes()
-                                            .into();
+
+                                    //If the file does not exist at the specified path, create one, and open it up either way.
+                                    //Read the contents and store them, then write the new contents to the file.
+                                    //If the file didnt' exist before, return a Void, if not, return the old contents.
+
+                                    let path = &String::from_utf8(ga.to_vec()).unwrap();
+                                    let exists = Path::new(path).exists();
+
+                                    let mut file;
+                                    
+                                    if !exists {
+                                        file = fs::File::create(path).unwrap();
+                                    }
+
+                                    file = fs::File::open(path).unwrap();
+
+                                    let mut contents = String::new();
+
+                                    file.read_to_string(&mut contents).unwrap();
 
                                     fs::write(
                                         String::from_utf8(ga.to_vec()).unwrap(),
@@ -555,7 +573,11 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
 
                                     clear_and_progress!();
 
-                                    stack.push_front(Abstract::Var(Var::Gestalt(file)));
+                                    stack.push_front( Abstract::Var (if exists {
+                                        Var::Gestalt(contents.into())
+                                    } else {
+                                        Var::Void
+                                    }));
                                 }
 
                                 _ => panic!(
