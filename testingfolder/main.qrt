@@ -1,1 +1,5 @@
-@"writer.qrt"{+""{+${3}}}:
+#path{"pizza.qrt"}
+
+@(path){
+    >"mama mia pizza"{6}
+}:
