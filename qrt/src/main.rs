@@ -4,14 +4,13 @@ use rand::random;
 use std::{
     collections::{HashMap, VecDeque},
     env, fs,
-    vec::Vec,
+    io::Read,
     path::Path,
-    io::Read
+    vec::Vec,
 };
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-
 
     let file: Vec<u8> = fs::read_to_string(&args[1])
         .expect("No such file found")
@@ -19,10 +18,7 @@ fn main() {
         .as_bytes()
         .into();
 
-    let input: Var = evaluate(
-        &String::into_bytes(args[2].clone()),
-        &Var::Void
-    );
+    let input: Var = evaluate(&String::into_bytes(args[2].clone()), &Var::Void);
 
     let evaluation = evaluate(&file, &input);
 
@@ -107,7 +103,6 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
     }
 
     loop {
-
         match program[on] {
             //Uncaught whitespace, new line, carriage return, and space respectively.
             10 | 13 | 32 => {
@@ -491,40 +486,30 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
                             //MISC
 
                             //Evaluation
-                            b'!' => {
-                                match (stack.front().unwrap(), stack.get(1).unwrap()) {
-                                    (Abstract::Var(v), Abstract::Var(Var::Linear(jmp))) => {
+                            b'!' => match (stack.front().unwrap(), stack.get(1).unwrap()) {
+                                (Abstract::Var(v), Abstract::Var(Var::Linear(jmp))) => {
+                                    let eva = evaluate(&program[*jmp as i64 as usize..], v);
 
-                                        let eva = evaluate(
-                                            &program[*jmp as i64 as usize..],
-                                            v
-                                        );
+                                    clear_and_progress!();
 
-                                        clear_and_progress!();
-
-                                        stack.push_front(Abstract::Var(eva));
-                                    }
-
-                                    (Abstract::Var(v), Abstract::Var(Var::Gestalt(g))) => {
-
-                                        let eva = evaluate(
-                                            g,
-                                            v
-                                        );
-
-                                        clear_and_progress!();
-
-                                        stack.push_front(Abstract::Var(eva));
-                                    }
-
-                                    _ => panic!(
-                                        "Incorrect variable types provided at {}: {:?}, {:?}",
-                                        on,
-                                        stack.front().unwrap(),
-                                        stack.get(1).unwrap()
-                                    ),
+                                    stack.push_front(Abstract::Var(eva));
                                 }
-                            }
+
+                                (Abstract::Var(v), Abstract::Var(Var::Gestalt(g))) => {
+                                    let eva = evaluate(g, v);
+
+                                    clear_and_progress!();
+
+                                    stack.push_front(Abstract::Var(eva));
+                                }
+
+                                _ => panic!(
+                                    "Incorrect variable types provided at {}: {:?}, {:?}",
+                                    on,
+                                    stack.front().unwrap(),
+                                    stack.get(1).unwrap()
+                                ),
+                            },
                             //Reading/writing files
                             b'@' => match (stack.get(1).unwrap(), stack.front().unwrap()) {
                                 (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void)) => {
@@ -543,7 +528,6 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
                                     Abstract::Var(Var::Gestalt(ga)),
                                     Abstract::Var(Var::Gestalt(gb)),
                                 ) => {
-
                                     //If the file does not exist at the specified path, create one, and open it up either way.
                                     //Read the contents and store them, then write the new contents to the file.
                                     //If the file didnt' exist before, return a Void, if not, return the old contents.
@@ -552,7 +536,7 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
                                     let exists = Path::new(path).exists();
 
                                     let mut file;
-                                    
+
                                     if !exists {
                                         file = fs::File::create(path).unwrap();
                                     }
@@ -573,7 +557,7 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
 
                                     clear_and_progress!();
 
-                                    stack.push_front( Abstract::Var (if exists {
+                                    stack.push_front(Abstract::Var(if exists {
                                         Var::Gestalt(contents.into())
                                     } else {
                                         Var::Void
