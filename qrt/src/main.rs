@@ -485,19 +485,38 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
 
                             //Evaluation
                             b'!' => {
-                                let jmp: f64 = unpack_var!(Linear, stack.get(1).unwrap());
+                                match (stack.front().unwrap(), stack.get(1).unwrap()) {
+                                    (Abstract::Var(v), Abstract::Var(Var::Linear(jmp))) => {
 
-                                let eva = evaluate(
-                                    &program[jmp as i64 as usize..],
-                                    match stack.front().unwrap() {
-                                        Abstract::Var(v) => v,
-                                        _ => &Var::Void,
-                                    },
-                                );
+                                        let eva = evaluate(
+                                            &program[*jmp as i64 as usize..],
+                                            v
+                                        );
 
-                                clear_and_progress!();
+                                        clear_and_progress!();
 
-                                stack.push_front(Abstract::Var(eva));
+                                        stack.push_front(Abstract::Var(eva));
+                                    }
+
+                                    (Abstract::Var(v), Abstract::Var(Var::Gestalt(g))) => {
+
+                                        let eva = evaluate(
+                                            g,
+                                            v
+                                        );
+
+                                        clear_and_progress!();
+
+                                        stack.push_front(Abstract::Var(eva));
+                                    }
+
+                                    _ => panic!(
+                                        "Incorrect variable types provided at {}: {:?}, {:?}",
+                                        on,
+                                        stack.front().unwrap(),
+                                        stack.get(1).unwrap()
+                                    ),
+                                }
                             }
                             //Reading/writing files
                             b'@' => match (stack.get(1).unwrap(), stack.front().unwrap()) {
@@ -572,8 +591,6 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
                                     stack.get(1).unwrap()
                                 ),
                             },
-                            //terminal access
-                            b'\'' => {}
                             //Conditional
                             b'?' => {
                                 clear_and_progress!();

@@ -1,7 +1,4 @@
 1.0 ROADMAP
-- complete operator list
-    - implement file reading
-    - implement terminal access
 - sort out and refine code
     - sort helper functions into modules
     - improve operation macro to reduce code repetition, replace entire b'}' match construct
