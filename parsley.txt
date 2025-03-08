@@ -1,11 +1,7 @@
 1.0 ROADMAP
 - complete operator list
-    - Linear-Gestalt coercion
-    - Gestalt/Set access, appending, reduction
-    - Convenience factors such as loops not needing gestalt returns (analyze for more examples)
     - implement file reading
     - implement terminal access
-- implement comment functionality
 - sort out and refine code (helper functions/macros, cleanup, documentation)
 - implement comprehensive error messsages and QOL features
 - finish debugging and publish interpeter 1.0

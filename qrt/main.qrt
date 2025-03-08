@@ -1,1 +1,5 @@
->+"hello "{"world"}{3.22};
+#!multiply{
+    *${2};
+}
+
+!(multiply){4};

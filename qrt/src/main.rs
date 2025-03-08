@@ -21,30 +21,12 @@ fn main() {
     println!("{:?}", evaluation);
 }
 
-fn qlog() {
-    println!("log!");
-}
-
 #[derive(Clone, Debug)]
 enum Var {
     Void,             //Null type
     Linear(f64),      //Numbers
     Gestalt(Vec<u8>), //Strings
     Set(Vec<Var>),    //Lists
-}
-impl Var {
-    fn bool(&self) -> bool {
-        match self {
-            Var::Linear(a) => {
-                if a > &0.0 {
-                    return true;
-                }
-                false
-            }
-
-            _ => false,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -54,7 +36,7 @@ enum Abstract {
     Loop(usize), //Loops are a special operator that require metadata pointing to their start location
 }
 
-fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
+fn evaluate(program: &[u8], input: &Var) -> Var {
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
     let mut map: HashMap<String, Var> = HashMap::new();
@@ -72,6 +54,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
         }};
     }
 
+    //This is a common piece of code for operations on the stack
     macro_rules! clear_and_progress {
         () => {
             stack.pop_front();
@@ -82,24 +65,9 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
         };
     }
 
-    //This macro should generate code for the general operation case
-    macro_rules! operate {
-        ($atype:tt, $btype:tt, $restype:tt $operation:expr) => {{
-            let result = $operation(
-                unpack_var!($atype, stack.get(1).unwrap()),
-                unpack_var!($btype, stack.get(0).unwrap()),
-            );
-
-            clear_and_progress!();
-
-            stack.push_front(Abstract::Var(Var::$restype(result)));
-        }};
-    }
-
-    //This macro should generated a type match statements for multiple operation variations.
-    //This is one of my most favoritest pieces of code I've written
+    //This macro generates a type match statements for multiple operation variations.
     macro_rules! multi_operate {
-        ( $( ($vartypea:tt, $vartypeb:tt, $outtype:tt $op:expr) ),*) => {{
+        ( $( ($vartypea:tt, $vartypeb:tt, $outtype:tt $operation:expr) ),*) => {{
             match (stack.get(1).unwrap(), stack.front().unwrap()) {
 
                 (Abstract::Var(Var::Void), _) | (_, Abstract::Var(Var::Void)) => {
@@ -110,7 +78,14 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                 $(
                     (Abstract::Var(Var::$vartypea(_)), Abstract::Var(Var::$vartypeb(_))) => {
-                        operate!($vartypea, $vartypeb, $outtype$op)
+                        let result = $operation(
+                            unpack_var!($vartypea, stack.get(1).unwrap()),
+                            unpack_var!($vartypeb, stack.get(0).unwrap()),
+                        );
+
+                        clear_and_progress!();
+
+                        stack.push_front(Abstract::Var(Var::$outtype(result)));
                     }
                 )*
 
@@ -124,7 +99,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
     }
 
     loop {
-        //print!("{}", program[on] as char);
+        //print!("{}", program[on] as char); (debugging tool)
 
         match program[on] {
             //Uncaught whitespace, new line, carriage return, and space respectively.
@@ -244,16 +219,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                 let mut set: Vec<Var> = Vec::new();
 
                 //Breaks if the first element in q is a opening bracket, signaling beginning of set
-                while match stack.front() {
-                    Some(a) => match a {
-                        Abstract::Operator(o) => match o {
-                            b'[' => false,
-                            _ => true,
-                        },
-                        _ => true,
-                    },
-                    _ => true,
-                } {
+                while !matches!(stack.front(), Some(Abstract::Operator(b'['))) {
                     //Adds variables to set in reverse order of q, maintaining original order
                     if let Abstract::Var(v) = stack.pop_front().unwrap() {
                         set.insert(0, v);
@@ -267,20 +233,32 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                 stack.push_front(Abstract::Var(Var::Set(set)));
             }
 
-            //Alias Assignment
+            //Alias and function assignment
             b'#' => {
-                stack.push_front(Abstract::Operator(b'#'));
-                on += 1;
+                let function = program[on + 1] == b'!';
 
-                let mut varname: Vec<u8> = Vec::new();
+                on += if function { 2 } else { 1 };
+
+                let mut name: Vec<u8> = Vec::new();
 
                 while program[on] != b'{' {
-                    varname.push(program[on]);
+                    name.push(program[on]);
                     on += 1;
                 }
+
                 on += 1;
 
-                stack.push_front(Abstract::Var(Var::Gestalt(varname)));
+                if function {
+                    //Special function case, save the current "on" as a linear in the map with the given name
+                    map.insert(String::from_utf8(name).unwrap(), Var::Linear(on as f64));
+
+                    //Now find the end of the function definition and set the on past there
+                    on = find_bracket_pair(program, on);
+                } else {
+                    //General variable case, wait for eval and save the name and operator to stack
+                    stack.push_front(Abstract::Operator(b'#'));
+                    stack.push_front(Abstract::Var(Var::Gestalt(name)));
+                }
             }
 
             //Void literal
@@ -323,10 +301,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
             //Terminator character, immediately matches top of stack to var and returns it, if its not a var then it returns void.
             b';' => {
                 return match stack.pop_front() {
-                    Some(a) => match a {
-                        Abstract::Var(v) => v,
-                        _ => Var::Void,
-                    },
+                    Some(Abstract::Var(v)) => v,
 
                     _ => Var::Void,
                 }
@@ -510,10 +485,12 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                             //Evaluation
                             b'!' => {
+                                let jmp: f64 = unpack_var!(Linear, stack.get(1).unwrap());
+
                                 let eva = evaluate(
-                                    &unpack_var!(Gestalt, stack.get(1).unwrap()),
+                                    &program[jmp as i64 as usize..],
                                     match stack.front().unwrap() {
-                                        Abstract::Var(v) => &v,
+                                        Abstract::Var(v) => v,
                                         _ => &Var::Void,
                                     },
                                 );
@@ -525,35 +502,31 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                             //Reading/writing files
                             b'@' => {}
                             //Set access, macro can't cover these subtypeless sets so its got its own special thingy
-                            b'`' => {
+                            b'`' => match (stack.get(1).unwrap(), stack.front().unwrap()) {
+                                (Abstract::Var(Var::Set(s)), Abstract::Var(Var::Linear(l))) => {
+                                    let element =
+                                        Abstract::Var(s.get(*l as i64 as usize).unwrap().clone());
 
-                                match (stack.get(1).unwrap(), stack.front().unwrap()) {
+                                    clear_and_progress!();
 
-                                    (Abstract::Var(Var::Set(s)), Abstract::Var(Var::Linear(l))) => {
-
-                                        let element = Abstract::Var(s.get(*l as i64 as usize).unwrap().clone());
-
-                                        clear_and_progress!();
-
-                                        stack.push_front(element);
-                                    }
-
-                                    (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Linear(l))) => {
-
-                                        let char = g[*l as i64 as usize];
-
-                                        clear_and_progress!();
-
-                                        stack.push_front(Abstract::Var(Var::Gestalt(vec!(char))));
-                                    }
-
-                                    _ => panic!("Incorrect variable types provided at {}: {:?}, {:?}",
-                                                on,
-                                                stack.front().unwrap(),
-                                                stack.get(1).unwrap()
-                                            )
+                                    stack.push_front(element);
                                 }
-                            }
+
+                                (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Linear(l))) => {
+                                    let char = g[*l as i64 as usize];
+
+                                    clear_and_progress!();
+
+                                    stack.push_front(Abstract::Var(Var::Gestalt(vec![char])));
+                                }
+
+                                _ => panic!(
+                                    "Incorrect variable types provided at {}: {:?}, {:?}",
+                                    on,
+                                    stack.front().unwrap(),
+                                    stack.get(1).unwrap()
+                                ),
+                            },
                             //terminal access
                             b'\'' => {}
                             //Conditional
@@ -563,7 +536,7 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
 
                             //Invalid operator
                             _ => {
-                                panic!("Invalid operator \"{}\"", a as char);
+                                panic!("Invalid operator \"{}\" at {}", a as char, on);
                             }
                         }
                     }
@@ -572,19 +545,25 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
                     _ => {
                         if let Abstract::Loop(start) = stack.get(2).unwrap() {
                             let start = *start;
+                            let mut recurse = true;
 
-                            //If the evaluation of the secondary argument is gestalt equal to the first,
-                            //Then the loop is terminated.
-                            if unpack_var!(Gestalt, stack.front().unwrap())
-                                == unpack_var!(Gestalt, stack.get(1).unwrap())
+                            //Recurse only falsifies if both outputs successfully evaluate to gestalts, and they are equal.
+                            //This ensures that loops can return non-gestalts to signal recursion
+                            if let (
+                                Abstract::Var(Var::Gestalt(ga)),
+                                Abstract::Var(Var::Gestalt(gb)),
+                            ) = (stack.front().unwrap(), stack.get(1).unwrap())
                             {
-                                //removes the whole of the loop code and moves forward
-                                clear_and_progress!();
-                            } else {
-                                //removes the secondary argument and starts over at the loop's associated on value
+                                recurse = ga != gb;
+                            }
+                            if recurse {
+                                //pops off secondary argument and starts over at loop's associated on value
                                 stack.pop_front();
 
                                 on = start;
+                            } else {
+                                //removes the whole of the loop code and moves forward
+                                clear_and_progress!();
                             }
                         }
                     }
@@ -602,22 +581,6 @@ fn evaluate(program: &Vec<u8>, input: &Var) -> Var {
     }
 }
 
-fn lintobool(linear: f64) -> bool {
-    if linear > 0.0 {
-        true
-    } else {
-        false
-    }
-}
-
-fn booltolin(boolean: bool) -> f64 {
-    if boolean {
-        1.0
-    } else {
-        0.0
-    }
-}
-
 fn unpack_operator(packed: &Abstract) -> Option<u8> {
     match packed {
         Abstract::Operator(o) => Some(*o),
@@ -627,7 +590,7 @@ fn unpack_operator(packed: &Abstract) -> Option<u8> {
 
 //Helper function, used to find the end of secondary args. Expects to start the character directly after the first bracket.
 //Returns the position directly after the pairing bracket.
-fn find_bracket_pair(program: &Vec<u8>, mut on: usize) -> usize {
+fn find_bracket_pair(program: &[u8], mut on: usize) -> usize {
     let (mut bracket_number, mut gestalt, mut escape) = (1, false, false);
 
     while bracket_number != 0 {
