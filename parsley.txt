@@ -2,8 +2,10 @@
 - complete operator list
     - implement file reading
     - implement terminal access
-- sort out and refine code (helper functions/macros, cleanup, documentation)
-- implement comprehensive error messsages and QOL features
+- sort out and refine code
+    - sort helper functions into modules
+    - improve operation macro to reduce code repetition, replace entire b'}' match construct
+- implement comprehensive error messsages
 - finish debugging and publish interpeter 1.0
 
 MISC PROJECTS:
