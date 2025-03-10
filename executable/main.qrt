@@ -1,5 +1,6 @@
 #path{"pizza.qrt"}
 
 @(path){
-    >"mama mia pizza"{6}
+    +>"mama mia pizza "{6}{
+    +""{^2{$}}}
 }:
