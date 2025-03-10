@@ -40,6 +40,11 @@ enum Abstract {
     Loop(usize), //Loops are a special operator that require metadata pointing to their start location
 }
 
+enum Status {
+    Ok,
+    Err
+}
+
 fn evaluate(program: &[u8], input: &Var) -> Var {
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
@@ -103,7 +108,7 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
     }
 
     loop {
-        match program[on] {
+        if let Status::Ok = {|| -> Status { match program[on] {
             //Uncaught whitespace, new line, carriage return, and space respectively.
             10 | 13 | 32 => {
                 on += 1;
@@ -645,6 +650,10 @@ fn evaluate(program: &[u8], input: &Var) -> Var {
                 stack.push_front(Abstract::Operator(program[on]));
                 on += 1;
             }
+        }}} {
+
+        } else {
+            todo!("code up this error message thingy");
         }
     }
 }
