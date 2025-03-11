@@ -183,7 +183,7 @@ fn evaluate(
     }
 
     loop {
-        match program[on] {
+        if let Status::Ok = {|| -> Status { match program[on] {
             //Uncaught whitespace, new line, carriage return, and space respectively.
             10 | 13 | 32 => {
                 on += 1;
@@ -719,6 +719,10 @@ fn evaluate(
                 stack.push_front(Abstract::Operator(program[on]));
                 on += 1;
             }
+        }}} {
+
+        } else {
+            todo!("code up this error message thingy");
         }
     }
 }
