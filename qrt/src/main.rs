@@ -101,7 +101,7 @@ fn evaluate(
             if let Abstract::Var(Var::$vartype(x)) = unpack_stack!($index) {
                 x.clone()
             } else {
-                return return_error!($typmsg)
+                return return_error!($typmsg);
             }
         }};
     }
@@ -111,7 +111,7 @@ fn evaluate(
             if let Ok(s) = String::from_utf8($utf8) {
                 s
             } else {
-                return return_error!("Invalid Gestalt chars")
+                return return_error!("Invalid Gestalt chars");
             }
         }};
     }
@@ -122,9 +122,9 @@ fn evaluate(
             if let Ok(s) = String::from_utf8($utf8) {
                 s
             } else {
-                return Err("Invalid Gestalt chars")
+                return Err("Invalid Gestalt chars");
             }
-        }}
+        }};
     }
 
     //This is a common piece of code for operations on the stack
@@ -157,7 +157,7 @@ fn evaluate(
                         );
 
                         clear_and_progress!();
-                        
+
                         match $operation(a.clone(), b.clone()) {
                             Ok(result) => {stack.push_front(Abstract::Var(Var::$outtype(result)));}
                             Err(error) => {return_error!(error)}
@@ -181,7 +181,7 @@ fn evaluate(
             if let Some(a) = stack.get($index) {
                 a
             } else {
-                return return_error!("Error in unpack_stack!")
+                return return_error!("Error in unpack_stack!");
             }
         };
     }
@@ -191,7 +191,7 @@ fn evaluate(
             if let Some(v) = map.get($id) {
                 v
             } else {
-                return return_error!("Variable not found")
+                return return_error!("Variable not found");
             }
         };
     }
@@ -224,7 +224,7 @@ fn evaluate(
                 if let Ok(number) = string_from_utf8!(gestalt).parse::<f64>() {
                     stack.push_front(Abstract::Var(Var::Linear(number)));
                 } else {
-                    return return_error!("incorrect linear formatting")
+                    return return_error!("incorrect linear formatting");
                 }
             }
 
@@ -286,7 +286,7 @@ fn evaluate(
                             let killid = if let Some(Abstract::Var(v)) = stack.pop_front() {
                                 v
                             } else {
-                                return return_error!("pop_front error in finding loop killid")
+                                return return_error!("pop_front error in finding loop killid");
                             };
 
                             //pops off killid and baby loop
@@ -470,53 +470,53 @@ fn evaluate(
                                         Ok((cstring_from_utf8!(a) + &cstring_from_utf8!(b)).into())
                                     }),
 
-                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Vec<Var> {
+                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Result<Vec<Var>, &str> {
                                         let mut newset = a.clone();
                                         newset.push(Var::Linear(b));
-                                        newset
+                                        Ok(newset)
                                     }),
 
-                                    (Set, Gestalt, Set|a: Vec<Var>, b: Vec<u8>| -> Vec<Var> {
+                                    (Set, Gestalt, Set|a: Vec<Var>, b: Vec<u8>| -> Result<Vec<Var>, &str> {
                                         let mut newset = a.clone();
                                         newset.push(Var::Gestalt(b));
-                                        newset
+                                        Ok(newset)
                                     })
                                 );
                             }
                             //Subtraction
                             b'-' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b:f64| -> f64 {a - b}),
+                                    (Linear, Linear, Linear|a: f64, b:f64| -> Result<f64, &str> {Ok(a - b)}),
 
-                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Vec<u8> {
+                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Result<Vec<u8>, &str> {
                                         let mut newges = a.clone();
                                         newges.remove(b as i64 as usize);
-                                        newges
+                                        Ok(newges)
                                     }),
 
-                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Vec<Var> {
+                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Result<Vec<Var>, &str> {
                                         let mut newset = a.clone();
                                         newset.remove(b as i64 as usize);
-                                        newset
+                                        Ok(newset)
                                     })
                                 )
                             }
                             //Multiplication
                             b'*' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {a * b})
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a * b)})
                                 )
                             }
                             //Division
                             b'/' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {a / b})
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a / b)})
                                 )
                             }
                             //Exponentiation
                             b'^' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {a.powf(b)})
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a.powf(b))})
                                 )
                             }
 
@@ -525,18 +525,16 @@ fn evaluate(
                             //And
                             b'&' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
-                                        if a > 0.0 && b > 0.0 {1.0} else {0.0}
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {
+                                        if a > 0.0 && b > 0.0 {Ok(1.0)} else {Ok(0.0)}
                                     })
-
-
                                 )
                             }
                             //Or
                             b'|' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
-                                        if a > 0.0 || b > 0.0 {1.0} else {0.0}
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {
+                                        if a > 0.0 || b > 0.0 {Ok(1.0)} else {Ok(0.0)}
                                     })
                                 )
                             }
@@ -545,49 +543,62 @@ fn evaluate(
 
                             //Equal to
                             b'=' => {
-                                multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
-                                        if a == b {1.0} else {0.0}
-                                    }),
+                                //Special case for two void variables, will return essentially a true
+                                if let (Abstract::Var(Var::Void), Abstract::Var(Var::Void)) =
+                                    (unpack_stack!(0), unpack_stack(1))
+                                {
+                                    clear_and_progress!();
 
-                                    (Gestalt, Gestalt, Linear|a: Vec<u8>, b: Vec<u8>| -> f64 {
-                                        if a == b {1.0} else {0.0}
-                                    })
-                                )
+                                    stack.push_front(Abstract::Var(Var::Linear(1.0)))
+                                } else {
+                                    multi_operate!(
+                                        (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {
+                                            if a == b {Ok(1.0)} else {Ok(0.0)}
+                                        }),
+
+                                        (Gestalt, Gestalt, Linear|a: Vec<u8>, b: Vec<u8>| -> Result<f64, &str> {
+                                            if a == b {Ok(1.0)} else {Ok(0.0)}
+                                        })
+
+                                        (Set, Set, Linear|a: Vec<Var>, b: Vec<Var>| -> Result<f64, &str> {
+                                            if a == b {Ok(1.0)} else {Ok(0.0)}
+                                        })
+                                    )
+                                }
                             }
                             //Greater than
                             b'>' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
-                                        if a > b {1.0} else {0.0}
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {
+                                        if a > b {Ok(1.0)} else {Ok(0.0)}
                                     }),
 
-                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Vec<u8> {
+                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Result<Vec<u8>, &str> {
                                         let mut newges = a.clone();
                                         newges.truncate(a.len() - b as i64 as usize);
-                                        newges
+                                        Ok(newges)
                                     }),
 
-                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Vec<Var> {
+                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Result<Vec<Var>, &str> {
                                         let mut newset = a.clone();
                                         newset.truncate(a.len() - b as i64 as usize);
-                                        newset
+                                        Ok(newset)
                                     })
                                 )
                             }
                             //Less than
                             b'<' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {
-                                        if a < b {1.0} else {0.0}
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {
+                                        if a < b {Ok(1.0)} else {Ok(0.0)}
                                     }),
 
-                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Vec<u8> {
-                                        a[b as i64 as usize..].to_vec()
+                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Result<Vec<u8>, &str> {
+                                        Ok(a[b as i64 as usize..].to_vec())
                                     }),
 
-                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Vec<Var> {
-                                        a[b as i64 as usize..].to_vec()
+                                    (Set, Linear, Set|a: Vec<Var>, b: f64| -> Result<Vec<Var>, &str> {
+                                        Ok(a[b as i64 as usize..].to_vec())
                                     })
                                 )
                             }
@@ -595,13 +606,19 @@ fn evaluate(
                             //MISC
 
                             //Evaluation
-                            b'!' => match (stack.front().unwrap(), stack.get(1).unwrap()) {
+                            b'!' => match (unpack_stack!(0), unpack_stack!(1)) {
                                 (Abstract::Var(v), Abstract::Var(Var::Linear(jmp))) => {
-                                    let eva = evaluate(&program[*jmp as i64 as usize..], v);
 
-                                    clear_and_progress!();
-
-                                    stack.push_front(Abstract::Var(eva));
+                                    //If the evaluation itself throws an error, that error and its interior stack/map are
+                                    //Given as the error, along with a notification of 
+                                    match evaluate(&program[*jmp as i64 as usize..], v) {
+                                        Ok(eva) => {clear_and_progress!();stack.push_front(Abstract::Var(eva))}
+                                        Err(msg, on, stack, map) => return Result::Err(
+                                            msg + "(In function at " + on + ")", 
+                                            on, 
+                                            stack, 
+                                            map)
+                                    }
                                 }
 
                                 (Abstract::Var(v), Abstract::Var(Var::Gestalt(g))) => {
