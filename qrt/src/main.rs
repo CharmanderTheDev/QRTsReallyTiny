@@ -101,7 +101,7 @@ fn evaluate(
             if let Abstract::Var(Var::$vartype(x)) = unpack_stack!($index) {
                 x.clone()
             } else {
-                return_error!($typmsg)
+                return return_error!($typmsg)
             }
         }};
     }
@@ -111,9 +111,20 @@ fn evaluate(
             if let Ok(s) = String::from_utf8($utf8) {
                 s
             } else {
-                return_error!("Invalid Gestalt chars")
+                return return_error!("Invalid Gestalt chars")
             }
         }};
+    }
+
+    //This is for use inside operation closures where the return type is a simpler Result
+    macro_rules! cstring_from_utf8 {
+        ($utf8:expr) => {{
+            if let Ok(s) = String::from_utf8($utf8) {
+                s
+            } else {
+                return Err("Invalid Gestalt chars")
+            }
+        }}
     }
 
     //This is a common piece of code for operations on the stack
@@ -129,7 +140,7 @@ fn evaluate(
 
     //This macro generates a type match statements for multiple operation variations.
     macro_rules! multi_operate {
-        ( $( ($vartypea:tt, $vartypeb:tt, $outtype:tt $operation:expr, $msg:expr) ),*) => {{
+        ( $( ($vartypea:tt, $vartypeb:tt, $outtype:tt $operation:expr) ),*) => {{
             match (stack.get(1).unwrap(), stack.front().unwrap()) {
 
                 (Abstract::Var(Var::Void), _) | (_, Abstract::Var(Var::Void)) => {
@@ -139,26 +150,29 @@ fn evaluate(
                 }
 
                 $(
-                    (Abstract::Var(Var::$vartypea(_)), Abstract::Var(Var::$vartypeb(_))) => {
+                    (Abstract::Var(Var::$vartypea(a)), Abstract::Var(Var::$vartypeb(b))) => {
                         let result = $operation(
-                            unpack_var!($vartypea, stack.get(1).unwrap(), $msg),
-                            unpack_var!($vartypeb, stack.get(0).unwrap(), $msg),
+                            a.clone(),
+                            b.clone()
                         );
 
                         clear_and_progress!();
-
-                        stack.push_front(Abstract::Var(Var::$outtype(result)));
+                        
+                        match $operation(a.clone(), b.clone()) {
+                            Ok(result) => {stack.push_front(Abstract::Var(Var::$outtype(result)));}
+                            Err(error) => {return_error!(error)}
+                        }
                     }
                 )*
 
-                _ => {}
+                _ => {return_error!("Incorrect types for operation")}
             }
         }};
     }
 
     macro_rules! return_error {
         ($errtext:expr) => {
-            return Result::Err(($errtext.to_string(), on, stack, map))
+            Result::Err(($errtext.to_string(), on, stack, map))
         };
     }
 
@@ -167,7 +181,7 @@ fn evaluate(
             if let Some(a) = stack.get($index) {
                 a
             } else {
-                return_error!("Error in unpack_stack!")
+                return return_error!("Error in unpack_stack!")
             }
         };
     }
@@ -177,7 +191,7 @@ fn evaluate(
             if let Some(v) = map.get($id) {
                 v
             } else {
-                return_error!("Variable not found")
+                return return_error!("Variable not found")
             }
         };
     }
@@ -210,7 +224,7 @@ fn evaluate(
                 if let Ok(number) = string_from_utf8!(gestalt).parse::<f64>() {
                     stack.push_front(Abstract::Var(Var::Linear(number)));
                 } else {
-                    return_error!("incorrect linear formatting")
+                    return return_error!("incorrect linear formatting")
                 }
             }
 
@@ -272,7 +286,7 @@ fn evaluate(
                             let killid = if let Some(Abstract::Var(v)) = stack.pop_front() {
                                 v
                             } else {
-                                return_error!("pop_front error in finding loop killid")
+                                return return_error!("pop_front error in finding loop killid")
                             };
 
                             //pops off killid and baby loop
@@ -438,18 +452,22 @@ fn evaluate(
                             //Addition
                             b'+' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> f64 {a + b}),
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a + b)}),
 
-                                    (Linear, Gestalt, Linear|a: f64, b: Vec<u8>| -> f64 {
-                                        a + String::from_utf8(b).unwrap().parse::<f64>().unwrap()
+                                    (Linear, Gestalt, Linear|a: f64, b: Vec<u8>| -> Result<f64, &str> {
+                                        if let Ok(b) = cstring_from_utf8!(b).parse::<f64>() {
+                                            return Ok(a + b)
+                                        } else {
+                                            return Err("Could not coerce Gestalt to Linear")
+                                        }
                                     }),
 
-                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Vec<u8> {
-                                        (String::from_utf8(a).unwrap() + &format!("{}", b)).into()
+                                    (Gestalt, Linear, Gestalt|a: Vec<u8>, b: f64| -> Result<Vec<u8>, &str> {
+                                        Ok((cstring_from_utf8!(a) + &format!("{}", b)).into())
                                     }),
 
-                                    (Gestalt, Gestalt, Gestalt|a: Vec<u8>, b: Vec<u8>| -> Vec<u8> {
-                                        (String::from_utf8(a).unwrap() + &String::from_utf8(b).unwrap()).into()
+                                    (Gestalt, Gestalt, Gestalt|a: Vec<u8>, b: Vec<u8>| -> Result<Vec<u8>, &str> {
+                                        Ok((cstring_from_utf8!(a) + &cstring_from_utf8!(b)).into())
                                     }),
 
                                     (Set, Linear, Set|a: Vec<Var>, b: f64| -> Vec<Var> {
