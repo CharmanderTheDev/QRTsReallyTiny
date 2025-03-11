@@ -1,5 +1,11 @@
 #path{"pizza.qrt"}
 
+#!timestwo{
+    *${2}:
+}
+
 @(path){
-    >"mama mia pizza"{6}
+    >"mama mia pizza"{
+        !(timestwo){$}
+    }
 }:
