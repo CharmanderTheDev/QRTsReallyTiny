@@ -134,19 +134,12 @@ impl Abstract {
     }
 }
 
+type Evaluation = Result<Var, (String, usize, usize, VecDeque<Abstract>, HashMap<String, Var>)>;
+
 fn evaluate(
     program: &[u8],
     input: &Var,
-) -> Result<
-    Var,
-    (
-        String,
-        usize,
-        usize,
-        VecDeque<Abstract>,
-        HashMap<String, Var>,
-    ),
-> {
+) -> Evaluation {
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
     let mut map: HashMap<String, Var> = HashMap::new();
@@ -549,9 +542,9 @@ fn evaluate(
 
                                     (Linear, Gestalt, Linear|a: f64, b: Vec<u8>| -> Result<f64, &str> {
                                         if let Ok(b) = cstring_from_utf8!(b).parse::<f64>() {
-                                            return Ok(a + b)
+                                            Ok(a + b)
                                         } else {
-                                            return Err("Could not coerce Gestalt to Linear")
+                                            Err("Could not coerce Gestalt to Linear")
                                         }
                                     }),
 
