@@ -1,5 +1,4 @@
 ROADMAP:
-- code cleanup, reorg, and commenting
 - write tests for each operation
 - debug using test results
 - write benchmarks for various common problems

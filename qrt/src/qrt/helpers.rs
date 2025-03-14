@@ -1,5 +1,7 @@
 use super::structs::*;
 
+//If the evaluation was an error, all the debug info is printed, and None is returned.
+//If the evaluation was a success, the Var is simply returned.
 pub fn unwrap_evaluation(error: Evaluation, showstack: bool, showmap: bool) -> Option<Var> {
     let (msg, on, lineon, stack, map) = match error {
         Ok(v) => return Some(v),

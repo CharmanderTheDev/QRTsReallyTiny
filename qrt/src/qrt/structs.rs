@@ -57,6 +57,7 @@ impl Abstract {
     }
 }
 
+//This rather complex type is given its own value here. It either has a variable, or a ton of debug info.
 pub type Evaluation = Result<
     Var,
     (

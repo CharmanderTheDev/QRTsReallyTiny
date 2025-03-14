@@ -12,13 +12,16 @@ extern crate rand;
 use rand::random;
 
 
-
+//This is the big one, our 750-line function that evaluates all QRT code with a little help.
 pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
+    //This is used to store the state of our program
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
+    //This is used to store declared variables within the program
     let mut map: HashMap<String, Var> = HashMap::new();
 
+    //This is used to store our place in evaluation
     let mut on = 0;
 
     //This macro coerces a Var to the desired type, throwing an error if it fails.
