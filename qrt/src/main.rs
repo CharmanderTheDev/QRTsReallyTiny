@@ -1,14 +1,10 @@
-extern crate rand;
-
-use rand::random;
 use std::{
-    collections::{HashMap, VecDeque},
     env, fs,
     vec::Vec,
 };
 
 mod qrt;
-use qrt::evaluate::evaluate;
+use qrt::{evaluate::evaluate, helpers::unwrap_evaluation, structs::Var};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -39,11 +35,4 @@ QRT file name (no extension), debug number (0-3)"
     };
 
     unwrap_evaluation(evaluate(&file, &Var::Void), showstack, showmap);
-
-    //println!("{:?}", evaluation);
 }
-
-
-
-
-

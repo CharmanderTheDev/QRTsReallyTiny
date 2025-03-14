@@ -1,4 +1,4 @@
-use super::{structs::*, helpers::functions::*};
+use super::{structs::*, helpers::*};
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -14,13 +14,14 @@ use rand::random;
 
 
 pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
+
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
     let mut map: HashMap<String, Var> = HashMap::new();
 
     let mut on = 0;
 
-    //This macro should generate match code for unpacking variables of any type
+    //This macro coerces a Var to the desired type, throwing an error if it fails.
     macro_rules! unpack_var {
         ($vartype:tt, $index:expr, $typmsg:expr) => {{
             if let Abstract::Var(Var::$vartype(x)) = unpack_stack!($index) {
@@ -31,6 +32,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
         }};
     }
 
+    //This macro converts a Vec<u8> (gestalt inner type) to a string, throwing the relevant error without unwrap.
     macro_rules! string_from_utf8 {
         ($utf8:expr) => {{
             if let Ok(s) = String::from_utf8($utf8) {
@@ -41,7 +43,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
         }};
     }
 
-    //This is for use inside operation closures where the return type is a simpler Result without the stack, map, etc.
+    //This is for use inside operation closures where the return type is a simpler Result with only a msg.
     macro_rules! cstring_from_utf8 {
         ($utf8:expr) => {{
             if let Ok(s) = String::from_utf8($utf8) {
@@ -63,7 +65,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
         };
     }
 
-    //This macro generates a type match statements for multiple operation variations.
+    //This macro generates mutliple type match statements for multiple operation variations (Linear-Linear, Gestalt-Linear, etc.)
     macro_rules! multi_operate {
         ( $( ($vartypea:tt, $vartypeb:tt, $outtype:tt $operation:expr) ),*) => {{
             match (unpack_stack!(1), unpack_stack!(0)) {
@@ -95,6 +97,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
         }};
     }
 
+    //This macro finds the current line, and returns the given error message along with the slew of sometimes-needed debug info
     macro_rules! return_error {
         ($errtext:expr) => {{
             let (mut i, mut linecount) = (on, 0);
@@ -112,6 +115,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
         }};
     }
 
+    //This macro takes an item off the stack and essentially unwraps it with our custom error sytem
     macro_rules! unpack_stack {
         ($index:expr) => {
             if let Some(a) = stack.get($index) {
@@ -124,6 +128,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
         };
     }
 
+    //This macro attempts to find an item on the map and automatically unwraps it with our custom error system
     macro_rules! unpack_map {
         ($id:expr) => {
             if let Some(v) = map.get($id) {
@@ -134,20 +139,30 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
         };
     }
 
+    //This is the main evaluation loop
     loop {
         //print!("{}", program[on] as char); //Silly debug tool
 
-        //NOTE: THE SOLUTION TO THE INCORRECT LINE PROBLEM IS THAT CODE IN FUNCTIONS IS SKIPPED OVER
-        //WITHOUT COUNTING LINES. JUST SCAN BACK THROUGH UPON AN ERROR AND COUNT THE NUMBER OF 10's IN THE Vec<u8>
-        //BEFORE THE OFFENDING CHARACTER, THEN PRINT OUT THAT VALUE.
         match program[on] {
-            //new line
-            10 => {
+
+            //Space, tab, carriage return, and new line. Essentially whitespace skipping.
+            19 | 32 | 13 | 10 => {
                 on += 1;
             }
 
-            //Space, tab, and carriage return
-            19 | 32 | 13 => {
+            //Set literal continuation, yes its redundant but its nicer.
+            b',' => {
+                on += 1;
+            }
+
+            //Comments
+            b'\\' => {
+                on += 1;
+
+                while program[on] != b'\\' {
+                    on += 1;
+                }
+
                 on += 1;
             }
 
@@ -218,9 +233,41 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 stack.push_front(Abstract::Var(Var::Gestalt(gestalt)));
             }
 
-            //Set literal continuation
-            b',' => {
+            //Set literal end (Beginning bracket should have already been pushed by last match)
+            b']' => {
+                let mut set: Vec<Var> = Vec::new();
+
+                //Breaks if the first element in q is a opening bracket, signaling beginning of set
+                while !matches!(stack.front(), Some(Abstract::Operator(b'['))) {
+                    //Adds variables to set in reverse order of q, maintaining original order
+                    if let Abstract::Var(v) = unpack_stack!(0) {
+                        set.insert(0, v.clone());
+                    }
+                }
+
+                //removes closing bracket operator
+                stack.pop_front();
+
                 on += 1;
+                stack.push_front(Abstract::Var(Var::Set(set)));
+            }
+
+            //Void literal
+            b'_' => {
+                on += 1;
+                stack.push_front(Abstract::Var(Var::Void));
+            }
+
+            //Input reference
+            b'$' => {
+                on += 1;
+                stack.push_front(Abstract::Var(input.clone()));
+            }
+
+            //Random reference
+            b'%' => {
+                on += 1;
+                stack.push_front(Abstract::Var(Var::Linear(random::<f64>())));
             }
 
             //Secondary argument beginning, checks if there is a conditional waiting, and skips code if there is and the latest value in the stack is false (<=0.0).
@@ -267,27 +314,9 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 }
             }
 
-            //Set literal end
-            b']' => {
-                let mut set: Vec<Var> = Vec::new();
-
-                //Breaks if the first element in q is a opening bracket, signaling beginning of set
-                while !matches!(stack.front(), Some(Abstract::Operator(b'['))) {
-                    //Adds variables to set in reverse order of q, maintaining original order
-                    if let Abstract::Var(v) = unpack_stack!(0) {
-                        set.insert(0, v.clone());
-                    }
-                }
-
-                //removes closing bracket operator
-                stack.pop_front();
-
-                on += 1;
-                stack.push_front(Abstract::Var(Var::Set(set)));
-            }
-
             //Alias and function assignment
             b'#' => {
+                //If a bang follows the hashtag, its a function
                 let function = program[on + 1] == b'!';
 
                 on += if function { 2 } else { 1 };
@@ -298,6 +327,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                     name.push(program[on]);
                     on += 1;
                 }
+
                 if program[on] == b'!' {
                     return_error!("Bangs (!) not allowed in variable names")
                 }
@@ -305,40 +335,25 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 on += 1;
 
                 if function {
-                    //Special function case, save the current "on" as a linear in the map with the given name
+                    
+                    //Special function case, save the current "on" as a linear in the map with the given name, and give it a fancy name for debugging
                     map.insert(
                         (string_from_utf8!(name) + if function { "!" } else { "" }),
                         Var::Linear(on as f64),
                     );
 
-                    //Now find the end of the function definition and set the on past there
+                    //Now find the end of the function definition and set the "on" past there
                     on = find_bracket_pair(program, on);
+
                 } else {
+
                     //General variable case, wait for eval and save the name and operator to stack
                     stack.push_front(Abstract::Operator(b'#'));
                     stack.push_front(Abstract::Var(Var::Gestalt(name)));
                 }
             }
 
-            //Void literal
-            b'_' => {
-                on += 1;
-                stack.push_front(Abstract::Var(Var::Void));
-            }
-
-            //Input literal
-            b'$' => {
-                on += 1;
-                stack.push_front(Abstract::Var(input.clone()));
-            }
-
-            //Random literal
-            b'%' => {
-                on += 1;
-                stack.push_front(Abstract::Var(Var::Linear(random::<f64>())));
-            }
-
-            //Alias (variable referencing)
+            //Alias referencing
             b'(' => {
                 on += 1;
 
@@ -350,6 +365,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 }
                 on += 1;
 
+                //Checks if either varname or varname! exists, since functions add bangs in definition
                 if map.contains_key(&string_from_utf8!(varname.clone())) {
                     stack.push_front(Abstract::Var(
                         unpack_map!(&string_from_utf8!(varname)).clone(),
@@ -362,27 +378,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 }
             }
 
-            //Terminator character, immediately matches top of stack to var and returns it, if its not a var then it returns void.
-            b':' => {
-                return match stack.pop_front() {
-                    Some(Abstract::Var(v)) => Ok(v),
-
-                    _ => Ok(Var::Void),
-                }
-            }
-
-            //Comments
-            b'\\' => {
-                on += 1;
-
-                while program[on] != b'\\' {
-                    on += 1;
-                }
-
-                on += 1;
-            }
-
-            //evaluates essentially all operators
+            //Closing bracket, evaluates all operators
             b'}' => {
                 match unpack_operator(unpack_stack!(2)) {
                     Some(a) => {
@@ -569,8 +565,8 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             b'!' => match (unpack_stack!(0), unpack_stack!(1)) {
                                 (Abstract::Var(v), Abstract::Var(Var::Linear(jmp))) => {
                                     //If the evaluation itself throws an error, that error and its interior stack/map are
-                                    //Given as the error, along with a notification of
-                                    match evaluate(&program[*jmp as i64 as usize..], v) {
+                                    //Given as the error, along with a notification of what function threw the error.
+                                    match evaluate(&program[jmp.clone() as i64 as usize..], &v) {
                                         Ok(eva) => {
                                             clear_and_progress!();
                                             stack.push_front(Abstract::Var(eva))
@@ -590,7 +586,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                 }
 
                                 (Abstract::Var(v), Abstract::Var(Var::Gestalt(g))) => {
-                                    let eva = match evaluate(g, v) {
+                                    let eva = match evaluate(&g, &v) {
                                         Ok(eva) => eva,
                                         Err((msg, funcon, funclineon, stack, map)) => {
                                             return Result::Err((
@@ -614,6 +610,8 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             },
                             //Reading/writing files
                             b'@' => match (unpack_stack!(1), unpack_stack!(0)) {
+
+                                //For a gestalt and a void, we're just reading, no writing.
                                 (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void)) => {
                                     let file: Vec<u8> =
                                         match fs::read_to_string(string_from_utf8!(g.to_vec())) {
@@ -630,6 +628,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                     Abstract::Var(Var::Gestalt(ga)),
                                     Abstract::Var(Var::Gestalt(gb)),
                                 ) => {
+                                    
                                     //If the file does not exist at the specified path, create one, and open it up either way.
                                     //Read the contents and store them, then write the new contents to the file.
                                     //If the file didnt' exist before, return a Void, if not, return the old contents.
@@ -681,16 +680,17 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                                 _ => return_error!("Invalid operand types"),
                             },
+
                             //Set access, macro can't cover these subtypeless sets so its got its own special thingy
                             b'`' => match (unpack_stack!(1), unpack_stack!(0)) {
                                 (Abstract::Var(Var::Set(s)), Abstract::Var(Var::Linear(l))) => {
                                     let element = Abstract::Var(
-                                        match s.get(*l as i64 as usize) {
+                                        match s.get(l.clone() as i64 as usize) {
                                             Some(i) => i,
                                             _ => {
                                                 return_error!(
                                                     "Could not get index ".to_string()
-                                                        + &format!("{}", *l as i64 as usize)
+                                                        + &format!("{}", l.clone() as i64 as usize)
                                                         + " from Set"
                                                 )
                                             }
@@ -704,7 +704,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                 }
 
                                 (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Linear(l))) => {
-                                    let char = g[*l as i64 as usize];
+                                    let char = g[l.clone() as i64 as usize];
 
                                     clear_and_progress!();
 
@@ -713,7 +713,8 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                                 _ => return_error!("Invalid types for operator"),
                             },
-                            //Conditional
+
+                            //Conditional, everything should've already been handled by the opening bracket.
                             b'?' => {
                                 clear_and_progress!();
                             }
@@ -726,7 +727,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                     //In this case, its not an operator, so it must be a loop
                     _ => {
                         if let Abstract::Loop(start) = unpack_stack!(2) {
-                            let start = *start;
+                            let start = start.clone();
                             let mut recurse = true;
 
                             //Recurse only falsifies if both outputs are equal, and both evaluate to Vars.
@@ -747,6 +748,15 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             }
                         }
                     }
+                }
+            }
+
+            //Terminator character, immediately matches top of stack to var and returns it, if its not a var then it returns void.
+            b':' => {
+                return match stack.pop_front() {
+                    Some(Abstract::Var(v)) => Ok(v),
+
+                    _ => Ok(Var::Void),
                 }
             }
 
