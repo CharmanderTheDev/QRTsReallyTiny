@@ -10,28 +10,23 @@ use std::{
 };
 
 fn main() {
-
     let args: Vec<String> = env::args().collect();
 
-    let debug: i32 = if let Ok(i) = &args[2].parse() {
-        *i
-    } else {
-        0
-    };
+    let debug: i32 = if let Ok(i) = &args[2].parse() { *i } else { 0 };
 
     let (showstack, showmap) = match debug {
         0 => (false, false),
         1 => (true, false),
         2 => (false, true),
         3 => (true, true),
-        _ => (false, false)
+        _ => (false, false),
     };
 
     let file: Vec<u8> = if let Ok(s) = fs::read_to_string(&args[1]) {
         s.into_bytes()
     } else {
         println!("No such QRT file found");
-        return
+        return;
     };
 
     unwrap_evaluation(evaluate(&file, &Var::Void), showstack, showmap);
@@ -40,34 +35,46 @@ fn main() {
 }
 
 fn unwrap_evaluation(
-    error: Result<Var, (String, usize, usize, VecDeque<Abstract>, HashMap<String, Var>)>, 
-    showstack: bool, 
-    showmap: bool) -> Option<Var> {
+    error: Result<
+        Var,
+        (
+            String,
+            usize,
+            usize,
+            VecDeque<Abstract>,
+            HashMap<String, Var>,
+        ),
+    >,
+    showstack: bool,
+    showmap: bool,
+) -> Option<Var> {
+    let (msg, on, lineon, stack, map) = match error {
+        Ok(v) => return Some(v),
+        Err((msg, on, lineon, stack, map)) => (msg, on, lineon, stack, map),
+    };
 
-        let (msg, on, lineon, stack, map) = match error {
-            Ok(v) => return Some(v),
-            Err((msg, on, lineon, stack, map )) => (msg, on, lineon, stack, map)
-        };
-
-        if showmap {
-            println!("\n\nVARIABLE MAP:");
-            for alias in map.into_iter() {
-                print!("{}: ", alias.0);
-                println!("{}", alias.1.represent())
-            }
+    if showmap {
+        println!("\n\nVARIABLE MAP:");
+        for alias in map.into_iter() {
+            print!("{}: ", alias.0);
+            println!("{}", alias.1.represent())
         }
+    }
 
-        if showstack {
-            println!("\n\nSTACK DUMP: ");
-            for element in stack.into_iter().rev() {
-                println!("{}", element.represent())
-            }
+    if showstack {
+        println!("\n\nSTACK DUMP: ");
+        for element in stack.into_iter().rev() {
+            println!("{}", element.represent())
         }
+    }
 
-        println!("\n\nERROR WHEN EXECUTING QRT CODE ON LINE {} AND CHARACTER {}:", lineon, on);
-        println!("{}", msg);
+    println!(
+        "\n\nERROR WHEN EXECUTING QRT CODE ON LINE {} AND CHARACTER {}:",
+        lineon, on
+    );
+    println!("{}", msg);
 
-        return None
+    return None;
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -130,8 +137,16 @@ impl Abstract {
 fn evaluate(
     program: &[u8],
     input: &Var,
-) -> Result<Var, (String, usize, usize, VecDeque<Abstract>, HashMap<String, Var>)> {
-
+) -> Result<
+    Var,
+    (
+        String,
+        usize,
+        usize,
+        VecDeque<Abstract>,
+        HashMap<String, Var>,
+    ),
+> {
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
     let mut map: HashMap<String, Var> = HashMap::new();
@@ -218,16 +233,15 @@ fn evaluate(
             let (mut i, mut linecount) = (on, 0);
 
             while i != 0 {
-
                 //Checks for newlines
                 if program[i] == 10 {
-                    linecount+=1;
+                    linecount += 1;
                 }
 
-                i-=1;
+                i -= 1;
             }
 
-            return Result::Err(($errtext.to_string(), on, linecount, stack, map))
+            return Result::Err(($errtext.to_string(), on, linecount, stack, map));
         }};
     }
 
@@ -260,7 +274,6 @@ fn evaluate(
         //WITHOUT COUNTING LINES. JUST SCAN BACK THROUGH UPON AN ERROR AND COUNT THE NUMBER OF 10's IN THE Vec<u8>
         //BEFORE THE OFFENDING CHARACTER, THEN PRINT OUT THAT VALUE.
         match program[on] {
-            
             //new line
             10 => {
                 on += 1;
@@ -414,10 +427,11 @@ fn evaluate(
 
                 let mut name: Vec<u8> = Vec::new();
 
-                while !(program[on] == b'{' || program[on] == b'!')  {
+                while !(program[on] == b'{' || program[on] == b'!') {
                     name.push(program[on]);
                     on += 1;
-                } if program[on] == b'!' {
+                }
+                if program[on] == b'!' {
                     return_error!("Bangs (!) not allowed in variable names")
                 }
 
@@ -425,7 +439,10 @@ fn evaluate(
 
                 if function {
                     //Special function case, save the current "on" as a linear in the map with the given name
-                    map.insert((string_from_utf8!(name) + if function {"!"} else {""}), Var::Linear(on as f64));
+                    map.insert(
+                        (string_from_utf8!(name) + if function { "!" } else { "" }),
+                        Var::Linear(on as f64),
+                    );
 
                     //Now find the end of the function definition and set the on past there
                     on = find_bracket_pair(program, on);
@@ -730,13 +747,12 @@ fn evaluate(
                             },
                             //Reading/writing files
                             b'@' => match (unpack_stack!(1), unpack_stack!(0)) {
-                                
                                 (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void)) => {
-                                    
-                                    let file: Vec<u8> = match fs::read_to_string(string_from_utf8!(g.to_vec())) {
-                                        Ok(s) => s.into_bytes(),
-                                        Err(_) => return_error!("Error in opening file")
-                                    };
+                                    let file: Vec<u8> =
+                                        match fs::read_to_string(string_from_utf8!(g.to_vec())) {
+                                            Ok(s) => s.into_bytes(),
+                                            Err(_) => return_error!("Error in opening file"),
+                                        };
 
                                     clear_and_progress!();
 
