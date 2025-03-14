@@ -22,7 +22,7 @@ fn main() {
         _ => (false, false),
     };
 
-    let file: Vec<u8> = if let Ok(s) = fs::read_to_string(&args[1]) {
+    let file: Vec<u8> = if let Ok(s) = fs::read_to_string(format!("{}.qrt", &args[1])) {
         s.into_bytes()
     } else {
         println!("No such QRT file found");
@@ -71,6 +71,7 @@ enum Var {
     Gestalt(Vec<u8>), //Strings
     Set(Vec<Var>),    //Lists
 }
+
 impl Var {
     //Custom representation schema for vars for debugging purposes
     fn represent(&self) -> String {
