@@ -12,6 +12,14 @@ use std::{
 fn main() {
     let args: Vec<String> = env::args().collect();
 
+    if args.len() < 4 {
+        println!(
+            "Not enough arguments provided. Please provide arguments in the following order:
+QRT file name (no extension), debug number (0-3)"
+        );
+        return;
+    }
+
     let debug: i32 = if let Ok(i) = &args[2].parse() { *i } else { 0 };
 
     let (showstack, showmap) = match debug {
