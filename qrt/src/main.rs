@@ -34,20 +34,7 @@ fn main() {
     //println!("{:?}", evaluation);
 }
 
-fn unwrap_evaluation(
-    error: Result<
-        Var,
-        (
-            String,
-            usize,
-            usize,
-            VecDeque<Abstract>,
-            HashMap<String, Var>,
-        ),
-    >,
-    showstack: bool,
-    showmap: bool,
-) -> Option<Var> {
+fn unwrap_evaluation(error: Evaluation, showstack: bool, showmap: bool) -> Option<Var> {
     let (msg, on, lineon, stack, map) = match error {
         Ok(v) => return Some(v),
         Err((msg, on, lineon, stack, map)) => (msg, on, lineon, stack, map),
@@ -74,7 +61,7 @@ fn unwrap_evaluation(
     );
     println!("{}", msg);
 
-    return None;
+    None
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -93,7 +80,7 @@ impl Var {
             Var::Linear(l) => f64::to_string(l),
 
             //Unwrap is fine here since getting the vec8 into the gestalt in the first place in QRT code should ensure validity
-            Var::Gestalt(g) => "\"".to_string() + &String::from_utf8(g.to_vec()).unwrap() + "\"",
+            Var::Gestalt(g) => "\"".to_string() + core::str::from_utf8(g).unwrap() + "\"",
 
             Var::Set(set) => {
                 let mut string: String = "[".to_string();
@@ -103,7 +90,7 @@ impl Var {
                     string.push_str(", ");
                 }
 
-                string.push_str("]");
+                string.push(']');
 
                 string
             }
@@ -134,12 +121,18 @@ impl Abstract {
     }
 }
 
-type Evaluation = Result<Var, (String, usize, usize, VecDeque<Abstract>, HashMap<String, Var>)>;
+type Evaluation = Result<
+    Var,
+    (
+        String,
+        usize,
+        usize,
+        VecDeque<Abstract>,
+        HashMap<String, Var>,
+    ),
+>;
 
-fn evaluate(
-    program: &[u8],
-    input: &Var,
-) -> Evaluation {
+fn evaluate(program: &[u8], input: &Var) -> Evaluation {
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
     let mut map: HashMap<String, Var> = HashMap::new();
