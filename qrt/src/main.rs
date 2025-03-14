@@ -10,23 +10,64 @@ use std::{
 };
 
 fn main() {
+
     let args: Vec<String> = env::args().collect();
 
-    let file: Vec<u8> = fs::read_to_string(&args[1])
-        .expect("No such file found")
-        .trim()
-        .as_bytes()
-        .into();
-
-    if let Ok(v) = evaluate(&String::into_bytes(args[2].clone()), &Var::Void) {
-        let input = v;
+    let debug: i32 = if let Ok(i) = &args[2].parse() {
+        *i
     } else {
-        panic!()
-    }
+        0
+    };
 
-    let evaluation = evaluate(&file, &input);
+    let (showstack, showmap) = match debug {
+        0 => (false, false),
+        1 => (true, false),
+        2 => (false, true),
+        3 => (true, true),
+        _ => (false, false)
+    };
+
+    let file: Vec<u8> = if let Ok(s) = fs::read_to_string(&args[1]) {
+        s.into_bytes()
+    } else {
+        println!("No such QRT file found");
+        return
+    };
+
+    unwrap_evaluation(evaluate(&file, &Var::Void), showstack, showmap);
 
     //println!("{:?}", evaluation);
+}
+
+fn unwrap_evaluation(
+    error: Result<Var, (String, usize, usize, VecDeque<Abstract>, HashMap<String, Var>)>, 
+    showstack: bool, 
+    showmap: bool) -> Option<Var> {
+
+        let (msg, on, lineon, stack, map) = match error {
+            Ok(v) => return Some(v),
+            Err((msg, on, lineon, stack, map )) => (msg, on, lineon, stack, map)
+        };
+
+        if showmap {
+            println!("\n\nVARIABLE MAP:");
+            for alias in map.into_iter() {
+                print!("{}: ", alias.0);
+                println!("{}", alias.1.represent())
+            }
+        }
+
+        if showstack {
+            println!("\n\nSTACK DUMP: ");
+            for element in stack.into_iter().rev() {
+                println!("{}", element.represent())
+            }
+        }
+
+        println!("\n\nERROR WHEN EXECUTING QRT CODE ON LINE {} AND CHARACTER {}:", lineon, on);
+        println!("{}", msg);
+
+        return None
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -44,6 +85,7 @@ impl Var {
 
             Var::Linear(l) => f64::to_string(l),
 
+            //Unwrap is fine here since getting the vec8 into the gestalt in the first place in QRT code should ensure validity
             Var::Gestalt(g) => "\"".to_string() + &String::from_utf8(g.to_vec()).unwrap() + "\"",
 
             Var::Set(set) => {
@@ -72,7 +114,7 @@ impl Abstract {
     //Custom representation schema for abstract for debugging purposes
     fn represent(&self) -> String {
         match self {
-            Abstract::Var(v) => v.represent(),
+            Abstract::Var(v) => "Var(".to_string() + &v.represent() + ")",
 
             Abstract::Operator(o) => {
                 let mut buf = vec![0; 1];
@@ -88,7 +130,8 @@ impl Abstract {
 fn evaluate(
     program: &[u8],
     input: &Var,
-) -> Result<Var, (String, usize, VecDeque<Abstract>, HashMap<String, Var>)> {
+) -> Result<Var, (String, usize, usize, VecDeque<Abstract>, HashMap<String, Var>)> {
+
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
     let mut map: HashMap<String, Var> = HashMap::new();
@@ -101,7 +144,7 @@ fn evaluate(
             if let Abstract::Var(Var::$vartype(x)) = unpack_stack!($index) {
                 x.clone()
             } else {
-                return return_error!($typmsg);
+                return_error!($typmsg);
             }
         }};
     }
@@ -111,12 +154,12 @@ fn evaluate(
             if let Ok(s) = String::from_utf8($utf8) {
                 s
             } else {
-                return return_error!("Invalid Gestalt chars");
+                return_error!("Invalid Gestalt chars");
             }
         }};
     }
 
-    //This is for use inside operation closures where the return type is a simpler Result
+    //This is for use inside operation closures where the return type is a simpler Result without the stack, map, etc.
     macro_rules! cstring_from_utf8 {
         ($utf8:expr) => {{
             if let Ok(s) = String::from_utf8($utf8) {
@@ -141,7 +184,7 @@ fn evaluate(
     //This macro generates a type match statements for multiple operation variations.
     macro_rules! multi_operate {
         ( $( ($vartypea:tt, $vartypeb:tt, $outtype:tt $operation:expr) ),*) => {{
-            match (stack.get(1).unwrap(), stack.front().unwrap()) {
+            match (unpack_stack!(1), unpack_stack!(0)) {
 
                 (Abstract::Var(Var::Void), _) | (_, Abstract::Var(Var::Void)) => {
                     clear_and_progress!();
@@ -158,22 +201,34 @@ fn evaluate(
 
                         clear_and_progress!();
 
-                        match $operation(a.clone(), b.clone()) {
+                        match result {
                             Ok(result) => {stack.push_front(Abstract::Var(Var::$outtype(result)));}
                             Err(error) => {return_error!(error)}
                         }
                     }
                 )*
 
-                _ => {return_error!("Incorrect types for operation")}
+                _ => {return_error!("Invalid operand types")}
             }
         }};
     }
 
     macro_rules! return_error {
-        ($errtext:expr) => {
-            Result::Err(($errtext.to_string(), on, stack, map))
-        };
+        ($errtext:expr) => {{
+            let (mut i, mut linecount) = (on, 0);
+
+            while i != 0 {
+
+                //Checks for newlines
+                if program[i] == 10 {
+                    linecount+=1;
+                }
+
+                i-=1;
+            }
+
+            return Result::Err(($errtext.to_string(), on, linecount, stack, map))
+        }};
     }
 
     macro_rules! unpack_stack {
@@ -181,7 +236,9 @@ fn evaluate(
             if let Some(a) = stack.get($index) {
                 a
             } else {
-                return return_error!("Error in unpack_stack!");
+                return_error!(
+                    "Error getting index ".to_string() + &format!("{}", $index) + "from stack"
+                );
             }
         };
     }
@@ -191,15 +248,26 @@ fn evaluate(
             if let Some(v) = map.get($id) {
                 v
             } else {
-                return return_error!("Variable not found");
+                return_error!("Variable not found");
             }
         };
     }
 
     loop {
+        //print!("{}", program[on] as char); //Silly debug tool
+
+        //NOTE: THE SOLUTION TO THE INCORRECT LINE PROBLEM IS THAT CODE IN FUNCTIONS IS SKIPPED OVER
+        //WITHOUT COUNTING LINES. JUST SCAN BACK THROUGH UPON AN ERROR AND COUNT THE NUMBER OF 10's IN THE Vec<u8>
+        //BEFORE THE OFFENDING CHARACTER, THEN PRINT OUT THAT VALUE.
         match program[on] {
-            //Uncaught whitespace, new line, carriage return, and space respectively.
-            10 | 13 | 32 => {
+            
+            //new line
+            10 => {
+                on += 1;
+            }
+
+            //Space, tab, and carriage return
+            19 | 32 | 13 => {
                 on += 1;
             }
 
@@ -224,7 +292,7 @@ fn evaluate(
                 if let Ok(number) = string_from_utf8!(gestalt).parse::<f64>() {
                     stack.push_front(Abstract::Var(Var::Linear(number)));
                 } else {
-                    return return_error!("incorrect linear formatting");
+                    return_error!("Incorrect linear formatting");
                 }
             }
 
@@ -279,14 +347,18 @@ fn evaluate(
             //Also checks if there is a "baby" loop, and sets the relevant beginning on it, "maturing" the loop.
             //Also checks for function definitions, adds the given name to the function map and moves past the interior code
             b'{' => {
-                match stack.get(1).unwrap() {
+                match if let Some(a) = stack.get(1) {
+                    a
+                } else {
+                    return_error!("Error finding operator for opening bracket");
+                } {
                     Abstract::Operator(o) => {
                         if o == &b'~' {
                             //convert latest value to a killid for the matured loop
                             let killid = if let Some(Abstract::Var(v)) = stack.pop_front() {
                                 v
                             } else {
-                                return return_error!("pop_front error in finding loop killid");
+                                return_error!("Pop_front error in finding loop killid");
                             };
 
                             //pops off killid and baby loop
@@ -297,12 +369,7 @@ fn evaluate(
                             stack.push_front(Abstract::Loop(on + 1));
                             stack.push_front(Abstract::Var(killid));
                         } else if o == &b'?' {
-                            if unpack_var!(
-                                Linear,
-                                0,
-                                "Incorrect conditional type given to ? operator"
-                            ) > 0.0
-                            {
+                            if unpack_var!(Linear, 0, "Invalid operand types") > 0.0 {
                                 on += 1;
                             } else {
                                 on = find_bracket_pair(program, on + 1);
@@ -347,16 +414,18 @@ fn evaluate(
 
                 let mut name: Vec<u8> = Vec::new();
 
-                while program[on] != b'{' {
+                while !(program[on] == b'{' || program[on] == b'!')  {
                     name.push(program[on]);
                     on += 1;
+                } if program[on] == b'!' {
+                    return_error!("Bangs (!) not allowed in variable names")
                 }
 
                 on += 1;
 
                 if function {
                     //Special function case, save the current "on" as a linear in the map with the given name
-                    map.insert(string_from_utf8!(name), Var::Linear(on as f64));
+                    map.insert((string_from_utf8!(name) + if function {"!"} else {""}), Var::Linear(on as f64));
 
                     //Now find the end of the function definition and set the on past there
                     on = find_bracket_pair(program, on);
@@ -397,9 +466,16 @@ fn evaluate(
                 }
                 on += 1;
 
-                stack.push_front(Abstract::Var(
-                    unpack_map!(&string_from_utf8!(varname)).clone(),
-                ));
+                if map.contains_key(&string_from_utf8!(varname.clone())) {
+                    stack.push_front(Abstract::Var(
+                        unpack_map!(&string_from_utf8!(varname)).clone(),
+                    ));
+                } else {
+                    varname.push(b'!');
+                    stack.push_front(Abstract::Var(
+                        unpack_map!(&string_from_utf8!(varname)).clone(),
+                    ));
+                }
             }
 
             //Terminator character, immediately matches top of stack to var and returns it, if its not a var then it returns void.
@@ -545,7 +621,7 @@ fn evaluate(
                             b'=' => {
                                 //Special case for two void variables, will return essentially a true
                                 if let (Abstract::Var(Var::Void), Abstract::Var(Var::Void)) =
-                                    (unpack_stack!(0), unpack_stack(1))
+                                    (unpack_stack!(0), unpack_stack!(1))
                                 {
                                     clear_and_progress!();
 
@@ -558,7 +634,7 @@ fn evaluate(
 
                                         (Gestalt, Gestalt, Linear|a: Vec<u8>, b: Vec<u8>| -> Result<f64, &str> {
                                             if a == b {Ok(1.0)} else {Ok(0.0)}
-                                        })
+                                        }),
 
                                         (Set, Set, Linear|a: Vec<Var>, b: Vec<Var>| -> Result<f64, &str> {
                                             if a == b {Ok(1.0)} else {Ok(0.0)}
@@ -608,37 +684,59 @@ fn evaluate(
                             //Evaluation
                             b'!' => match (unpack_stack!(0), unpack_stack!(1)) {
                                 (Abstract::Var(v), Abstract::Var(Var::Linear(jmp))) => {
-
                                     //If the evaluation itself throws an error, that error and its interior stack/map are
-                                    //Given as the error, along with a notification of 
+                                    //Given as the error, along with a notification of
                                     match evaluate(&program[*jmp as i64 as usize..], v) {
-                                        Ok(eva) => {clear_and_progress!();stack.push_front(Abstract::Var(eva))}
-                                        Err(msg, on, stack, map) => return Result::Err(
-                                            msg + "(In function at " + on + ")", 
-                                            on, 
-                                            stack, 
-                                            map)
+                                        Ok(eva) => {
+                                            clear_and_progress!();
+                                            stack.push_front(Abstract::Var(eva))
+                                        }
+                                        Err((msg, funcon, funclineon, stack, map)) => {
+                                            return Result::Err((
+                                                msg + "(In function evaluated at "
+                                                    + &format!("{}", on)
+                                                    + ")",
+                                                funcon,
+                                                funclineon,
+                                                stack,
+                                                map,
+                                            ))
+                                        }
                                     }
                                 }
 
                                 (Abstract::Var(v), Abstract::Var(Var::Gestalt(g))) => {
-                                    let eva = evaluate(g, v);
+                                    let eva = match evaluate(g, v) {
+                                        Ok(eva) => eva,
+                                        Err((msg, funcon, funclineon, stack, map)) => {
+                                            return Result::Err((
+                                                msg + "(In function evaluated at "
+                                                    + &format!("{}", on)
+                                                    + ")",
+                                                funcon,
+                                                funclineon,
+                                                stack,
+                                                map,
+                                            ))
+                                        }
+                                    };
 
                                     clear_and_progress!();
 
                                     stack.push_front(Abstract::Var(eva));
                                 }
 
-                                _ => panic!(),
+                                _ => return_error!("Invalid operand types"),
                             },
                             //Reading/writing files
-                            b'@' => match (stack.get(1).unwrap(), stack.front().unwrap()) {
+                            b'@' => match (unpack_stack!(1), unpack_stack!(0)) {
+                                
                                 (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void)) => {
-                                    let file: Vec<u8> =
-                                        fs::read_to_string(String::from_utf8(g.to_vec()).unwrap())
-                                            .expect("No such file found")
-                                            .as_bytes()
-                                            .into();
+                                    
+                                    let file: Vec<u8> = match fs::read_to_string(string_from_utf8!(g.to_vec())) {
+                                        Ok(s) => s.into_bytes(),
+                                        Err(_) => return_error!("Error in opening file")
+                                    };
 
                                     clear_and_progress!();
 
@@ -653,24 +751,37 @@ fn evaluate(
                                     //Read the contents and store them, then write the new contents to the file.
                                     //If the file didnt' exist before, return a Void, if not, return the old contents.
 
-                                    let path = &String::from_utf8(ga.to_vec()).unwrap();
-                                    let exists = Path::new(path).exists();
+                                    let path = string_from_utf8!(ga.to_vec());
+                                    let exists = Path::new(&path).exists();
 
                                     let mut file;
 
                                     if !exists {
-                                        file = fs::File::create(path).unwrap();
+                                        match fs::File::create(path.clone()) {
+                                            Ok(f) => f,
+                                            Err(_) => {
+                                                return_error!("Error in creating file")
+                                            }
+                                        };
                                     }
 
-                                    file = fs::File::open(path).unwrap();
+                                    file = match fs::File::open(&path) {
+                                        Ok(f) => f,
+                                        Err(_) => return_error!("Error in opening file"),
+                                    };
 
                                     let mut contents = String::new();
 
-                                    file.read_to_string(&mut contents).unwrap();
+                                    match file.read_to_string(&mut contents) {
+                                        Ok(_) => (),
+                                        Err(_) => {
+                                            return_error!("Error reading file to string")
+                                        }
+                                    }
 
                                     fs::write(
-                                        String::from_utf8(ga.to_vec()).unwrap(),
-                                        String::from_utf8(gb.to_vec()).unwrap(),
+                                        string_from_utf8!(ga.to_vec()),
+                                        string_from_utf8!(gb.to_vec()),
                                     )
                                     .expect(
                                         &("Unable to write file at ".to_string() + &on.to_string()),
@@ -685,13 +796,24 @@ fn evaluate(
                                     }));
                                 }
 
-                                _ => panic!(),
+                                _ => return_error!("Invalid operand types"),
                             },
                             //Set access, macro can't cover these subtypeless sets so its got its own special thingy
-                            b'`' => match (stack.get(1).unwrap(), stack.front().unwrap()) {
+                            b'`' => match (unpack_stack!(1), unpack_stack!(0)) {
                                 (Abstract::Var(Var::Set(s)), Abstract::Var(Var::Linear(l))) => {
-                                    let element =
-                                        Abstract::Var(s.get(*l as i64 as usize).unwrap().clone());
+                                    let element = Abstract::Var(
+                                        match s.get(*l as i64 as usize) {
+                                            Some(i) => i,
+                                            _ => {
+                                                return_error!(
+                                                    "Could not get index ".to_string()
+                                                        + &format!("{}", *l as i64 as usize)
+                                                        + " from Set"
+                                                )
+                                            }
+                                        }
+                                        .clone(),
+                                    );
 
                                     clear_and_progress!();
 
@@ -706,7 +828,7 @@ fn evaluate(
                                     stack.push_front(Abstract::Var(Var::Gestalt(vec![char])));
                                 }
 
-                                _ => panic!(),
+                                _ => return_error!("Invalid types for operator"),
                             },
                             //Conditional
                             b'?' => {
@@ -714,22 +836,20 @@ fn evaluate(
                             }
 
                             //Invalid operator
-                            _ => {
-                                panic!();
-                            }
+                            _ => return_error!("Invalid operator"),
                         }
                     }
 
                     //In this case, its not an operator, so it must be a loop
                     _ => {
-                        if let Abstract::Loop(start) = stack.get(2).unwrap() {
+                        if let Abstract::Loop(start) = unpack_stack!(2) {
                             let start = *start;
                             let mut recurse = true;
 
                             //Recurse only falsifies if both outputs are equal, and both evaluate to Vars.
                             //This ensures loops can have varying return types.
                             if let (Abstract::Var(va), Abstract::Var(vb)) =
-                                (stack.front().unwrap(), stack.get(1).unwrap())
+                                (unpack_stack!(0), unpack_stack!(1))
                             {
                                 recurse = va != vb;
                             }
