@@ -1,4 +1,4 @@
-use super::{structs::*, helpers::*};
+use super::{helpers::*, structs::*};
 
 use std::{
     collections::{HashMap, VecDeque},
@@ -11,10 +11,8 @@ use std::{
 extern crate rand;
 use rand::random;
 
-
 //This is the big one, our 750-line function that evaluates all QRT code with a little help.
 pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
-
     //This is used to store the state of our program
     let mut stack: VecDeque<Abstract> = VecDeque::new();
 
@@ -147,7 +145,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
         //print!("{}", program[on] as char); //Silly debug tool
 
         match program[on] {
-
             //Space, tab, carriage return, and new line. Essentially whitespace skipping.
             19 | 32 | 13 | 10 => {
                 on += 1;
@@ -338,7 +335,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 on += 1;
 
                 if function {
-                    
                     //Special function case, save the current "on" as a linear in the map with the given name, and give it a fancy name for debugging
                     map.insert(
                         (string_from_utf8!(name) + if function { "!" } else { "" }),
@@ -347,9 +343,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                     //Now find the end of the function definition and set the "on" past there
                     on = find_bracket_pair(program, on);
-
                 } else {
-
                     //General variable case, wait for eval and save the name and operator to stack
                     stack.push_front(Abstract::Operator(b'#'));
                     stack.push_front(Abstract::Var(Var::Gestalt(name)));
@@ -569,7 +563,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                 (Abstract::Var(v), Abstract::Var(Var::Linear(jmp))) => {
                                     //If the evaluation itself throws an error, that error and its interior stack/map are
                                     //Given as the error, along with a notification of what function threw the error.
-                                    match evaluate(&program[jmp.clone() as i64 as usize..], &v) {
+                                    match evaluate(&program[*jmp as i64 as usize..], v) {
                                         Ok(eva) => {
                                             clear_and_progress!();
                                             stack.push_front(Abstract::Var(eva))
@@ -589,7 +583,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                 }
 
                                 (Abstract::Var(v), Abstract::Var(Var::Gestalt(g))) => {
-                                    let eva = match evaluate(&g, &v) {
+                                    let eva = match evaluate(g, v) {
                                         Ok(eva) => eva,
                                         Err((msg, funcon, funclineon, stack, map)) => {
                                             return Result::Err((
@@ -613,7 +607,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             },
                             //Reading/writing files
                             b'@' => match (unpack_stack!(1), unpack_stack!(0)) {
-
                                 //For a gestalt and a void, we're just reading, no writing.
                                 (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void)) => {
                                     let file: Vec<u8> =
@@ -631,7 +624,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                     Abstract::Var(Var::Gestalt(ga)),
                                     Abstract::Var(Var::Gestalt(gb)),
                                 ) => {
-                                    
                                     //If the file does not exist at the specified path, create one, and open it up either way.
                                     //Read the contents and store them, then write the new contents to the file.
                                     //If the file didnt' exist before, return a Void, if not, return the old contents.
@@ -688,12 +680,12 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             b'`' => match (unpack_stack!(1), unpack_stack!(0)) {
                                 (Abstract::Var(Var::Set(s)), Abstract::Var(Var::Linear(l))) => {
                                     let element = Abstract::Var(
-                                        match s.get(l.clone() as i64 as usize) {
+                                        match s.get(*l as i64 as usize) {
                                             Some(i) => i,
                                             _ => {
                                                 return_error!(
                                                     "Could not get index ".to_string()
-                                                        + &format!("{}", l.clone() as i64 as usize)
+                                                        + &format!("{}", *l as i64 as usize)
                                                         + " from Set"
                                                 )
                                             }
@@ -707,7 +699,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                 }
 
                                 (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Linear(l))) => {
-                                    let char = g[l.clone() as i64 as usize];
+                                    let char = g[*l as i64 as usize];
 
                                     clear_and_progress!();
 
@@ -730,7 +722,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                     //In this case, its not an operator, so it must be a loop
                     _ => {
                         if let Abstract::Loop(start) = unpack_stack!(2) {
-                            let start = start.clone();
+                            let start = *start;
                             let mut recurse = true;
 
                             //Recurse only falsifies if both outputs are equal, and both evaluate to Vars.
