@@ -141,8 +141,17 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
     }
 
     //This is the main evaluation loop
-    loop {
+    'main: loop {
         //print!("{}", program[on] as char); //Silly debug tool
+
+        //Returns if the end of the program has been reached or exceeded
+        if on >= program.len() {
+            return match stack.pop_front() {
+                Some(Abstract::Var(v)) => Ok(v),
+
+                _ => Ok(Var::Void),
+            };
+        }
 
         match program[on] {
             //Space, tab, carriage return, and new line. Essentially whitespace skipping.
@@ -159,8 +168,14 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
             b'\\' => {
                 on += 1;
 
+                //In the case where a trailing comment exists in the program, the evaluator will detect that on has gone out of bounds
+                //And continue back to the loop head, where the evaluator will return the head of the stack as usual.
                 while program[on] != b'\\' {
                     on += 1;
+
+                    if on >= program.len() {
+                        continue 'main;
+                    }
                 }
 
                 on += 1;
@@ -240,8 +255,10 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 //Breaks if the first element in q is a opening bracket, signaling beginning of set
                 while !matches!(stack.front(), Some(Abstract::Operator(b'['))) {
                     //Adds variables to set in reverse order of q, maintaining original order
-                    if let Abstract::Var(v) = unpack_stack!(0) {
+                    if let Some(Abstract::Var(v)) = stack.pop_front() {
                         set.insert(0, v.clone());
+                    } else {
+                        return_error!("Likely: no opening bracket given for set literal")
                     }
                 }
 

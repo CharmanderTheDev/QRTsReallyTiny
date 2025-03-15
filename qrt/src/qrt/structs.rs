@@ -34,7 +34,7 @@ impl Var {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Abstract {
     Var(Var),     //Values
     Operator(u8), //Generic operators, also include "loops" that haven't been initialized yet.

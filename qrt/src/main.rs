@@ -3,6 +3,8 @@ use std::{env, fs, vec::Vec};
 mod qrt;
 use qrt::{evaluate::evaluate, helpers::unwrap_evaluation, structs::Var};
 
+pub mod tests;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
