@@ -33,5 +33,5 @@ QRT file name (no extension), debug number (0-3)"
         return;
     };
 
-    unwrap_evaluation(evaluate(&file, &Var::Void), showstack, showmap);
+    unwrap_evaluation(evaluate(&file, &Var::void()), showstack, showmap);
 }

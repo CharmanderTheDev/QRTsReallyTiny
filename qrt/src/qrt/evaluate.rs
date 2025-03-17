@@ -22,6 +22,9 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
     //This is used to store our place in evaluation
     let mut on = 0;
 
+    //Used to assign killids to loops
+    let mut killidon: usize = 0;
+
     //This macro coerces a Var to the desired type, throwing an error if it fails.
     macro_rules! unpack_var {
         ($vartype:tt, $index:expr, $typmsg:expr) => {{
@@ -71,12 +74,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
         ( $( ($vartypea:tt, $vartypeb:tt, $outtype:tt $operation:expr) ),*) => {{
             match (unpack_stack!(1), unpack_stack!(0)) {
 
-                (Abstract::Var(Var::Void), _) | (_, Abstract::Var(Var::Void)) => {
-                    clear_and_progress!();
-
-                    stack.push_front(Abstract::Var(Var::Void));
-                }
-
                 $(
                     (Abstract::Var(Var::$vartypea(a)), Abstract::Var(Var::$vartypeb(b))) => {
                         let result = $operation(
@@ -92,6 +89,12 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                         }
                     }
                 )*
+
+                (Abstract::Var(Var::Void(_)), _) | (_, Abstract::Var(Var::Void(_))) => {
+                    clear_and_progress!();
+
+                    stack.push_front(Abstract::Var(Var::void()));
+                }
 
                 _ => {return_error!("Invalid operand types")}
             }
@@ -149,7 +152,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
             return match stack.pop_front() {
                 Some(Abstract::Var(v)) => Ok(v),
 
-                _ => Ok(Var::Void),
+                _ => Ok(Var::void()),
             };
         }
 
@@ -272,7 +275,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
             //Void literal
             b'_' => {
                 on += 1;
-                stack.push_front(Abstract::Var(Var::Void));
+                stack.push_front(Abstract::Var(Var::void()));
             }
 
             //Input reference
@@ -298,20 +301,26 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 } {
                     Abstract::Operator(o) => {
                         if o == &b'~' {
-                            //convert latest value to a killid for the matured loop
-                            let killid = if let Some(Abstract::Var(v)) = stack.pop_front() {
-                                v
-                            } else {
-                                return_error!("Pop_front error in finding loop killid");
-                            };
+                            //assigns latest killid to the given variable name, and advances it.
+                            map.insert(
+                                string_from_utf8!(unpack_var!(
+                                    Gestalt,
+                                    0,
+                                    "Invalid kill variable name given to loop"
+                                )),
+                                Var::Kill(killidon),
+                            );
 
                             //pops off killid and baby loop
                             stack.pop_front();
                             stack.pop_front();
 
-                            //pushes on complete loop with correct beginning, and the killid
-                            stack.push_front(Abstract::Loop(on + 1));
-                            stack.push_front(Abstract::Var(killid));
+                            //pushes on complete loop with correct killid, and the loop's starting position as a linear
+                            stack.push_front(Abstract::Loop(killidon));
+                            stack.push_front(Abstract::Var(Var::Linear((on + 1) as f64)));
+
+                            //advances killidon
+                            killidon += 1;
                         } else if o == &b'?' {
                             if unpack_var!(Linear, 0, "Invalid operand types") > 0.0 {
                                 on += 1;
@@ -331,12 +340,9 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 }
             }
 
-            //Alias and function assignment
-            b'#' => {
-                //If a bang follows the hashtag, its a function
-                let function = program[on + 1] == b'!';
-
-                on += if function { 2 } else { 1 };
+            //Alias assignment and loop beginning, assigning the given name a relevant killid later.
+            b'#' | b'~' => {
+                on += 1;
 
                 let mut name: Vec<u8> = Vec::new();
 
@@ -351,20 +357,31 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                 on += 1;
 
-                if function {
-                    //Special function case, save the current "on" as a linear in the map with the given name, and give it a fancy name for debugging
-                    map.insert(
-                        (string_from_utf8!(name) + if function { "!" } else { "" }),
-                        Var::Linear(on as f64),
-                    );
+                //wait for eval and save the name and operator to stack
+                stack.push_front(Abstract::Operator(program[on]));
+                stack.push_front(Abstract::Var(Var::Gestalt(name)));
+            }
 
-                    //Now find the end of the function definition and set the "on" past there
-                    on = find_bracket_pair(program, on);
-                } else {
-                    //General variable case, wait for eval and save the name and operator to stack
-                    stack.push_front(Abstract::Operator(b'#'));
-                    stack.push_front(Abstract::Var(Var::Gestalt(name)));
+            //Jump assignment
+            b':' => {
+                on += 1;
+
+                let mut name: Vec<u8> = Vec::new();
+
+                while !(program[on] == b'{' || program[on] == b'!') {
+                    name.push(program[on]);
+                    on += 1;
                 }
+
+                if program[on] == b'!' {
+                    return_error!("Bangs (!) not allowed in function names")
+                }
+
+                //Inserts the correct skip place as a variable
+                map.insert(string_from_utf8!(name) + "!", Var::Linear(on as f64));
+
+                //Skips to after the bracket for find_bracket_pair to work correctly
+                on = find_bracket_pair(program, on + 2);
             }
 
             //Alias referencing
@@ -379,16 +396,30 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 }
                 on += 1;
 
-                //Checks if either varname or varname! exists, since functions add bangs in definition
-                if map.contains_key(&string_from_utf8!(varname.clone())) {
-                    stack.push_front(Abstract::Var(
-                        unpack_map!(&string_from_utf8!(varname)).clone(),
-                    ));
+                //Checks if either varname or varname! exists, since jumps (functions kinda) add bangs in definition
+                let var = if map.contains_key(&string_from_utf8!(varname.clone())) {
+                    unpack_map!(&string_from_utf8!(varname)).clone()
                 } else {
                     varname.push(b'!');
-                    stack.push_front(Abstract::Var(
-                        unpack_map!(&string_from_utf8!(varname)).clone(),
-                    ));
+                    unpack_map!(&string_from_utf8!(varname)).clone()
+                };
+
+                if let Var::Kill(killid) = var {
+                    //Destroys all values until reaching the loop
+                    while stack.get(1) != Some(&Abstract::Loop(killid)) {
+                        stack.pop_front();
+                    }
+
+                    //Sets the on to after the killed loop
+                    on = find_bracket_pair(
+                        program,
+                        unpack_var!(Linear, 0, "Error getting starting linear in loop kill") as i64
+                            as usize,
+                    );
+
+                    //Removes both the loop and its starting position linear from the stack
+                    stack.pop_front();
+                    stack.pop_front();
                 }
             }
 
@@ -410,7 +441,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                     .to_string(),
                                     match unpack_stack!(0) {
                                         Abstract::Var(v) => v.clone(),
-                                        _ => Var::Void,
+                                        _ => Var::void(),
                                     },
                                 );
 
@@ -422,6 +453,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             //Addition
                             b'+' => {
                                 multi_operate!(
+
                                     (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a + b)}),
 
                                     (Linear, Gestalt, Linear|a: f64, b: Vec<u8>| -> Result<f64, &str> {
@@ -513,28 +545,21 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                             //Equal to
                             b'=' => {
-                                //Special case for two void variables, will return essentially a true
-                                if let (Abstract::Var(Var::Void), Abstract::Var(Var::Void)) =
-                                    (unpack_stack!(0), unpack_stack!(1))
-                                {
-                                    clear_and_progress!();
+                                multi_operate!(
+                                    (Void, Void, Linear|_a: (), _b: ()| -> Result<f64, &str> {Ok(1.0)}),
 
-                                    stack.push_front(Abstract::Var(Var::Linear(1.0)))
-                                } else {
-                                    multi_operate!(
-                                        (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {
-                                            if a == b {Ok(1.0)} else {Ok(0.0)}
-                                        }),
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {
+                                        if a == b {Ok(1.0)} else {Ok(0.0)}
+                                    }),
 
-                                        (Gestalt, Gestalt, Linear|a: Vec<u8>, b: Vec<u8>| -> Result<f64, &str> {
-                                            if a == b {Ok(1.0)} else {Ok(0.0)}
-                                        }),
+                                    (Gestalt, Gestalt, Linear|a: Vec<u8>, b: Vec<u8>| -> Result<f64, &str> {
+                                        if a == b {Ok(1.0)} else {Ok(0.0)}
+                                    }),
 
-                                        (Set, Set, Linear|a: Vec<Var>, b: Vec<Var>| -> Result<f64, &str> {
-                                            if a == b {Ok(1.0)} else {Ok(0.0)}
-                                        })
-                                    )
-                                }
+                                    (Set, Set, Linear|a: Vec<Var>, b: Vec<Var>| -> Result<f64, &str> {
+                                        if a == b {Ok(1.0)} else {Ok(0.0)}
+                                    })
+                                )
                             }
                             //Greater than
                             b'>' => {
@@ -625,7 +650,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             //Reading/writing files
                             b'@' => match (unpack_stack!(1), unpack_stack!(0)) {
                                 //For a gestalt and a void, we're just reading, no writing.
-                                (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void)) => {
+                                (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void(_))) => {
                                     let file: Vec<u8> =
                                         match fs::read_to_string(string_from_utf8!(g.to_vec())) {
                                             Ok(s) => s.into_bytes(),
@@ -686,7 +711,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                     stack.push_front(Abstract::Var(if exists {
                                         Var::Gestalt(contents.into())
                                     } else {
-                                        Var::Void
+                                        Var::void()
                                     }));
                                 }
 
@@ -738,37 +763,21 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                     //In this case, its not an operator, so it must be a loop
                     _ => {
-                        if let Abstract::Loop(start) = unpack_stack!(2) {
-                            let start = *start;
-                            let mut recurse = true;
-
-                            //Recurse only falsifies if both outputs are equal, and both evaluate to Vars.
-                            //This ensures loops can have varying return types.
-                            if let (Abstract::Var(va), Abstract::Var(vb)) =
-                                (unpack_stack!(0), unpack_stack!(1))
-                            {
-                                recurse = va != vb;
-                            }
-                            if recurse {
-                                //pops off secondary argument and starts over at loop's associated on value
-                                stack.pop_front();
-
-                                on = start;
-                            } else {
-                                //removes the whole of the loop code and moves forward
-                                clear_and_progress!();
-                            }
+                        if let Abstract::Loop(_) = unpack_stack!(1) {
+                            //If the end of the loop has been reached, that means no kill variable was invoked, and recursion can simply take place
+                            on = unpack_var!(Linear, 0, "Error retrieving loop start for recursion")
+                                as i64 as usize;
                         }
                     }
                 }
             }
 
             //Terminator character, immediately matches top of stack to var and returns it, if its not a var then it returns void.
-            b':' => {
+            b';' => {
                 return match stack.pop_front() {
                     Some(Abstract::Var(v)) => Ok(v),
 
-                    _ => Ok(Var::Void),
+                    _ => Ok(Var::void()),
                 }
             }
 

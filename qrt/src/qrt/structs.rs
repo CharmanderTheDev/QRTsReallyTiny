@@ -2,16 +2,17 @@ use std::collections::{HashMap, VecDeque};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Var {
-    Void,             //Null type
+    Void(()),         //Null type
     Linear(f64),      //Numbers
     Gestalt(Vec<u8>), //Strings
     Set(Vec<Var>),    //Lists
+    Kill(usize),      //KillIDs for loops
 }
 impl Var {
     //Custom representation schema for vars for debugging purposes
     pub fn represent(&self) -> String {
         match self {
-            Var::Void => "Void".to_string(),
+            Var::Void(_) => "Void".to_string(),
 
             Var::Linear(l) => f64::to_string(l),
 
@@ -30,7 +31,16 @@ impl Var {
 
                 string
             }
+
+            Var::Kill(n) => {
+                format!("KillID({})", n)
+            }
         }
+    } 
+
+    //This function returns a void with an empty tuple for convienence's sake
+    pub fn void() -> Var {
+        Var::Void(())
     }
 }
 
