@@ -132,11 +132,42 @@ mod tests {
 
         (modulus, b"`9{2}", Var::Linear(1.0)),
         (gestalt_access, b"`\"hello\"{3}", Var::Gestalt(b"l".to_vec())),
-        (set_access, b"`[1,2,3]{1}", Var::Linear(2.0))
+        (set_access, b"`[1,2,3]{1}", Var::Linear(2.0)),
 
-        //ADVANCED COMPOSITE PROGRAMS
+        //ADVANCED PROGRAMS
 
         //sieve of eratosthenes
-        
+        (sieve, b"
+            #primes{[2]}
+            #checking{3}
+            ~main{
+                ?=^(primes){_}{$}{(main)}
+                #isprime{1}
+                #checkingon{0}
+                ~checker{
+                    \\ checks if we've reached the end of the primes list \\
+                    ?=(checkingon){^(primes){_}}{
+                        (checker)
+                    }
+
+                    \\ checks if the checking is divisible by the current prime \\
+                    ?=`(checking){`(primes){(checkingon)}}{0} {
+                        #isprime{0}
+                        (checker)
+                    }
+
+                    #checkingon{+(checkingon){1}}
+                }
+
+                ?(isprime){
+                    #primes{+(primes){(checking)}}
+                }
+
+                #checking{+(checking){1}}
+            }
+
+            `(primes){-${1}};
+
+        ", Var::Linear(181.0))
     }
 }

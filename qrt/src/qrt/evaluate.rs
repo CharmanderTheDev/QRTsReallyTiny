@@ -434,7 +434,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                     //If the end of the loop has been reached, that means no kill variable was invoked, and recursion can simply take place
                     on = unpack_var!(Linear, 0, "Error retrieving loop start for recursion") as i64
                         as usize;
-                        
                 } else {
                     match unpack_operator(unpack_stack!(2)) {
                         Some(a) => {
