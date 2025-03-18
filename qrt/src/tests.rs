@@ -117,11 +117,11 @@ mod tests {
                 +!0{-${1}}{1};
             }
             !(unit!){16};",
-        
+
         Var::Linear(16.0)),
 
         (looping, b"#a{0}~kill{?=}", Var::Linear(16.0))
-        
+
 
         //ADVANCED COMPOSITE PROGRAMS
 

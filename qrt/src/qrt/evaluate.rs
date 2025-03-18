@@ -1,7 +1,11 @@
 use super::{helpers::*, structs::*};
 
 use std::{
-    collections::{HashMap, VecDeque}, fs, io::Read, path::Path, vec::Vec
+    collections::{HashMap, VecDeque},
+    fs,
+    io::Read,
+    path::Path,
+    vec::Vec,
 };
 
 extern crate rand;
@@ -188,7 +192,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                     if on >= program.len() {
                         break;
                     }
-                    
+
                     match program[on] {
                         b'0'..=b'9' | b'.' => {
                             gestalt.push(program[on]);
@@ -204,8 +208,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 } else {
                     return_error!("Incorrect linear formatting");
                 }
-
-
             }
 
             //Gestalt literal
@@ -321,7 +323,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             //advances killidon, and the on into the loop code
                             killidon += 1;
                             on += 1;
-                        
                         } else if o == &b'?' {
                             if unpack_var!(Linear, 0, "Invalid conditional type") > 0.0 {
                                 on += 1;
@@ -332,7 +333,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             stack.pop_front();
                             stack.pop_front(); /*pops conditional and condition*/
                         } else {
-                            on +=1;
+                            on += 1;
                         }
                     }
 
@@ -368,7 +369,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
             //Jump assignment
             b':' => {
-
                 on += 1;
 
                 let mut name: Vec<u8> = Vec::new();
@@ -617,7 +617,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             //Evaluation
                             b'!' => match (unpack_stack!(0), unpack_stack!(1)) {
                                 (Abstract::Var(v), Abstract::Var(Var::Linear(jmp))) => {
-
                                     //If the evaluation itself throws an error, that error and its interior stack/map are
                                     //Given as the error, along with a notification of what function threw the error.
                                     match evaluate(&program[*jmp as i64 as usize..], v) {
@@ -665,7 +664,6 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                             //Reading/writing files
                             b'@' => match (unpack_stack!(1), unpack_stack!(0)) {
-                                
                                 //For a gestalt and a void, we're just reading, no writing.
                                 (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void(_))) => {
                                     let file: Vec<u8> =
@@ -774,15 +772,12 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                     stack.push_front(Abstract::Var(Var::Linear(result)));
                                 }
 
-
                                 _ => return_error!("Invalid types for operator"),
                             },
 
                             //Conditional, everything should've already been handled by the opening bracket.
-                            //If this point is reached, then 
-                            b'?' => {
-
-                            }
+                            //If this point is reached, then
+                            b'?' => {}
 
                             //Invalid operator
                             _ => return_error!("Invalid operator"),
