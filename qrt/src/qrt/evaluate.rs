@@ -1,11 +1,7 @@
 use super::{helpers::*, structs::*};
 
 use std::{
-    collections::{HashMap, VecDeque},
-    fs,
-    io::Read,
-    path::Path,
-    vec::Vec,
+    collections::{HashMap, VecDeque}, fs, io::Read, path::Path, vec::Vec
 };
 
 extern crate rand;
@@ -192,6 +188,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                     if on >= program.len() {
                         break;
                     }
+                    
                     match program[on] {
                         b'0'..=b'9' | b'.' => {
                             gestalt.push(program[on]);
@@ -207,6 +204,8 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 } else {
                     return_error!("Incorrect linear formatting");
                 }
+
+
             }
 
             //Gestalt literal
@@ -319,19 +318,22 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             stack.push_front(Abstract::Loop(killidon));
                             stack.push_front(Abstract::Var(Var::Linear((on + 1) as f64)));
 
-                            //advances killidon
+                            //advances killidon, and the on into the loop code
                             killidon += 1;
+                            on += 1;
+                        
                         } else if o == &b'?' {
-                            if unpack_var!(Linear, 0, "Invalid operand types") > 0.0 {
+                            if unpack_var!(Linear, 0, "Invalid conditional type") > 0.0 {
                                 on += 1;
                             } else {
                                 on = find_bracket_pair(program, on + 1);
-                                stack.pop_front();
-                                stack.pop_front(); /*pops conditional and condition*/
                             }
-                        }
 
-                        on += 1;
+                            stack.pop_front();
+                            stack.pop_front(); /*pops conditional and condition*/
+                        } else {
+                            on +=1;
+                        }
                     }
 
                     _ => {
@@ -342,6 +344,8 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
             //Alias assignment and loop beginning, assigning the given name a relevant killid later.
             b'#' | b'~' => {
+                let operator = program[on];
+
                 on += 1;
 
                 let mut name: Vec<u8> = Vec::new();
@@ -358,12 +362,13 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 on += 1;
 
                 //wait for eval and save the name and operator to stack
-                stack.push_front(Abstract::Operator(program[on]));
+                stack.push_front(Abstract::Operator(operator));
                 stack.push_front(Abstract::Var(Var::Gestalt(name)));
             }
 
             //Jump assignment
             b':' => {
+
                 on += 1;
 
                 let mut name: Vec<u8> = Vec::new();
@@ -377,8 +382,8 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                     return_error!("Bangs (!) not allowed in function names")
                 }
 
-                //Inserts the correct skip place as a variable
-                map.insert(string_from_utf8!(name) + "!", Var::Linear(on as f64));
+                //Inserts the correct jump place as a variable
+                map.insert(string_from_utf8!(name) + "!", Var::Linear((on + 1) as f64));
 
                 //Skips to after the bracket for find_bracket_pair to work correctly
                 on = find_bracket_pair(program, on + 2);
@@ -400,8 +405,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 let var = if map.contains_key(&string_from_utf8!(varname.clone())) {
                     unpack_map!(&string_from_utf8!(varname)).clone()
                 } else {
-                    varname.push(b'!');
-                    unpack_map!(&string_from_utf8!(varname)).clone()
+                    return_error!("Variable does not exist")
                 };
 
                 if let Var::Kill(killid) = var {
@@ -420,6 +424,8 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                     //Removes both the loop and its starting position linear from the stack
                     stack.pop_front();
                     stack.pop_front();
+                } else {
+                    stack.push_front(Abstract::Var(var));
                 }
             }
 
@@ -482,6 +488,11 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                         let mut newset = a.clone();
                                         newset.push(Var::Gestalt(b));
                                         Ok(newset)
+                                    }),
+
+                                    (Set, Set, Set|mut a: Vec<Var>, b: Vec<Var>| -> Result<Vec<Var>, &str> {
+                                        for var in b {a.push(var.clone())}
+                                        Ok(a)
                                     })
                                 );
                             }
@@ -518,7 +529,10 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             //Exponentiation
                             b'^' => {
                                 multi_operate!(
-                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a.powf(b))})
+                                    (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a.powf(b))}),
+
+                                    //Special case for giving the length of a Set
+                                    (Set, Void, Linear|a: Vec<Var>, _b: ()| -> Result<f64, &str> {Ok(a.len() as f64)})
                                 )
                             }
 
@@ -603,6 +617,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                             //Evaluation
                             b'!' => match (unpack_stack!(0), unpack_stack!(1)) {
                                 (Abstract::Var(v), Abstract::Var(Var::Linear(jmp))) => {
+
                                     //If the evaluation itself throws an error, that error and its interior stack/map are
                                     //Given as the error, along with a notification of what function threw the error.
                                     match evaluate(&program[*jmp as i64 as usize..], v) {
@@ -612,7 +627,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                         }
                                         Err((msg, funcon, funclineon, stack, map)) => {
                                             return Result::Err((
-                                                msg + "(In function evaluated at "
+                                                msg + " \n(In function evaluated at "
                                                     + &format!("{}", on)
                                                     + ")",
                                                 funcon,
@@ -647,8 +662,10 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                                 _ => return_error!("Invalid operand types"),
                             },
+
                             //Reading/writing files
                             b'@' => match (unpack_stack!(1), unpack_stack!(0)) {
+                                
                                 //For a gestalt and a void, we're just reading, no writing.
                                 (Abstract::Var(Var::Gestalt(g)), Abstract::Var(Var::Void(_))) => {
                                     let file: Vec<u8> =
@@ -718,7 +735,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                 _ => return_error!("Invalid operand types"),
                             },
 
-                            //Set access, macro can't cover these subtypeless sets so its got its own special thingy
+                            //Set & gestalt indexing, macro can't cover these subtypeless sets so its got its own special thingy
                             b'`' => match (unpack_stack!(1), unpack_stack!(0)) {
                                 (Abstract::Var(Var::Set(s)), Abstract::Var(Var::Linear(l))) => {
                                     let element = Abstract::Var(
@@ -748,12 +765,23 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                     stack.push_front(Abstract::Var(Var::Gestalt(vec![char])));
                                 }
 
+                                //Special modulus functionality
+                                (Abstract::Var(Var::Linear(a)), Abstract::Var(Var::Linear(b))) => {
+                                    let result = a % b;
+
+                                    clear_and_progress!();
+
+                                    stack.push_front(Abstract::Var(Var::Linear(result)));
+                                }
+
+
                                 _ => return_error!("Invalid types for operator"),
                             },
 
                             //Conditional, everything should've already been handled by the opening bracket.
+                            //If this point is reached, then 
                             b'?' => {
-                                clear_and_progress!();
+
                             }
 
                             //Invalid operator

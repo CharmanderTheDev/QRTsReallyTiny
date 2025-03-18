@@ -36,7 +36,7 @@ impl Var {
                 format!("KillID({})", n)
             }
         }
-    } 
+    }
 
     //This function returns a void with an empty tuple for convienence's sake
     pub fn void() -> Var {
