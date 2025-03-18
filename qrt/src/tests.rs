@@ -109,7 +109,7 @@ mod tests {
         //MISCELLANEOUS
         (assignment_and_aliases, b"#me{2}(me)", Var::Linear(2.0)),
 
-        (evaluate_jump, b":plusone{+${1};}!(plusone){1}", Var::Linear(2.0)),
+        (evaluate_jump, b":plusone{+${1};}!(plusone!){1}", Var::Linear(2.0)),
         (evaluate_macro, b"!\"+${1}\"{1}", Var::Linear(2.0)),
         (evaluate_recursion, b"
             :unit{
@@ -120,11 +120,23 @@ mod tests {
 
         Var::Linear(16.0)),
 
-        (looping, b"#a{0}~kill{?=}", Var::Linear(16.0))
+        (looping, b"
+            #a{0}
+            ~kill{
+                ?=(a){16}{
+                    (kill)
+                }
+                #a{+(a){1}}
+            }
+            (a)", Var::Linear(16.0)),
 
+        (modulus, b"`9{2}", Var::Linear(1.0)),
+        (gestalt_access, b"`\"hello\"{3}", Var::Gestalt(b"l".to_vec())),
+        (set_access, b"`[1,2,3]{1}", Var::Linear(2.0))
 
         //ADVANCED COMPOSITE PROGRAMS
 
         //sieve of eratosthenes
+        
     }
 }

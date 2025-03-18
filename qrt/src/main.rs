@@ -1,11 +1,7 @@
 use std::{env, fs, vec::Vec};
 
 mod qrt;
-use qrt::{
-    evaluate::evaluate, 
-    helpers::unwrap_evaluation, 
-    structs::Var
-};
+use qrt::{evaluate::evaluate, helpers::unwrap_evaluation, structs::Var};
 
 pub mod tests;
 
