@@ -19,7 +19,7 @@ a literal, a reference, or an operation. Literals can take 1 of 6 forms:
         Sets are currently .clone()'d for practically every operation they take part in. 
         This brutally unperformant policy is probably the #1 problem with this interpreter.
         Yes I could use a mutex or something to fix this but honestly the language works
-        and I'm lazy to try and fix this when nobody's using it anyway
+        and I'm lazy to try and fix this when nobody's using it anyway.
     - Void (written as a single underscore)
     - Input (written as a single dollar sign)
         When programs are called from the terminal, this is always equal to Void.
