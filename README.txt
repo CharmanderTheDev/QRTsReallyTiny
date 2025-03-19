@@ -15,9 +15,11 @@ a literal, a reference, or an operation. Literals can take 1 of 6 forms:
     - Linear (written as a sequence of digits with 1 or 0 decimal points)
     - Gestalt (written as a sequence of ASCII characters within double quotes, allowing escapes)
     - Set (written as a sequence of expressions seperated by commas within square brackets)
-        !PLEASE NOTE that due to rust's borrow checker, prohibiting multiple mutable references,
+        !PLEASE NOTE! that due to rust's borrow checker, prohibiting multiple mutable references,
         Sets are currently .clone()'d for practically every operation they take part in. 
-        This brutally unperformant policy is probably the #1 problem with this interpreter!
+        This brutally unperformant policy is probably the #1 problem with this interpreter.
+        Yes I could use a mutex or something to fix this but honestly the language works
+        and I'm lazy to try and fix this when nobody's using it anyway
     - Void (written as a single underscore)
     - Input (written as a single dollar sign)
         When programs are called from the terminal, this is always equal to Void.
@@ -71,8 +73,8 @@ sub-evaluation returns. This essentially works as a function call. Example progr
 :plusone{+${1};} \"function" defined here\
 !(plusone!){2}; \"function" "called" here, will return 3\
 
-!PLEASE NOTE that calling a jump with a literal linear, such as !0{_}, can be used for recursive purposes, as the jump
-is relative to the "start" of the current sub-evaluation.!
+!PLEASE NOTE! that calling a jump with a literal linear, such as !0{_}, can be used for recursive purposes, as the jump
+is relative to the "start" of the current sub-evaluation.
 
 Macros:
 evaluates the given gestalt as if it were a program, setting its input to the secondary argument,
@@ -80,9 +82,9 @@ and returning whatever that evaluation returns. See example program below.
 #plussone{"+${1};"} \"macro" defined here\
 !(plusone){2}; \"macro" called here, will return 3\
 
-!PLEASE NOTE that within jumps and macros, the sub-evaluation has a completely reset scope,
+!PLEASE NOTE! that within jumps and macros, the sub-evaluation has a completely reset scope,
 so variables defined outside of the functions will not be avaliable, including other functions.
-One possible solution is passing a set into your function as input that includes desired/needed macros!
+One possible solution is passing a set into your function as input that includes desired/needed macros.
 
 Looping:
 using the tilde (~) as its operator, takes in a plainly written alias as its primary argument, and
@@ -99,8 +101,8 @@ The loop itself will return nothing. Example code below.
 }
 a; \returns a, or 10\
 
-!PLEASE NOTE that by necessity, loop bodies can return NOTHING. If a tailing expression exists in a loop body
-that returns a value, the loop will not function correctly!
+!PLEASE NOTE! that by necessity, loop bodies can return NOTHING. If a tailing expression exists in a loop body
+that returns a value, the loop will not function correctly.
 
 File Access:
 using the at symbol (@) as its operator, takes in a Gestalt as its primary argument, and either a Gestalt
@@ -122,8 +124,8 @@ example 3:
 example 4:
 @"hello_world.txt"{"goodbye world"} \creates a new file named "hello_world.txt", containing the phrase "goodbye world"\
 
-!PLEASE NOTE that returned values for file writing, function calling, etc. can be discarded by assigning them
-to a void literal, with #_(VALUE). This is useful for loops, as nothing can return values within them.!
+!PLEASE NOTE! that returned values for file writing, function calling, etc. can be discarded by assigning them
+to a void literal, with #_(VALUE). This is useful for loops, as nothing can return values within them.
 
 OTHER OPERATIONS:
 this section will be structured as follows: a category will be named, with a list of operators.
