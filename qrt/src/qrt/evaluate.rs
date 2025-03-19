@@ -351,9 +351,15 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                 let mut name: Vec<u8> = Vec::new();
 
-                while !(program[on] == b'{' || program[on] == b'!') {
+                while !(program[on] == b'{' || program[on] == b'!' || program[on] == b'_') {
                     name.push(program[on]);
                     on += 1;
+                }
+
+                if program[on] == b'_' {
+                    stack.push_front(Abstract::Operator(operator));
+                    stack.push_front(Abstract::Var(Var::void()));
+                    continue
                 }
 
                 if program[on] == b'!' {
@@ -442,6 +448,12 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                                 //Alias assignment
                                 b'#' => {
+                                    //This allows "value discarding" with assignment
+                                    if let Abstract::Var(Var::Void(_)) = unpack_stack!(1) {
+                                        clear_and_progress!();
+                                        continue
+                                    }
+
                                     map.insert(
                                         string_from_utf8!(unpack_var!(
                                             Gestalt,
@@ -450,7 +462,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                         )),
                                         match unpack_stack!(0) {
                                             Abstract::Var(v) => v.clone(),
-                                            _ => Var::void(),
+                                            _ => return_error!("Invalid assignment value"),
                                         },
                                     );
 
@@ -543,7 +555,9 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                     multi_operate!(
                                         (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a.powf(b))}),
 
-                                        //Special case for giving the length of a Set
+                                        //Special cases for giving the length of sets and gestalts
+                                        (Gestalt, Void, Linear|a: Vec<u8>, _b: ()| -> Result<f64, &str> {Ok(a.len() as f64)}),
+                                        
                                         (Set, Void, Linear|a: Vec<Var>, _b: ()| -> Result<f64, &str> {Ok(a.len() as f64)})
                                     )
                                 }

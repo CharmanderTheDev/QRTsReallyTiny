@@ -65,6 +65,7 @@ mod tests {
 
         (division, b"/3{2}", Var::Linear(1.5)),
         (exponentiation, b"^3{2}", Var::Linear(9.0)),
+        (gestalt_length, b"^\"hello\"{_}", Var::Linear(5.0)),
         (set_length, b"^[1,2,3]{_}", Var::Linear(3.0)),
 
         //LOGICAL
