@@ -42,11 +42,13 @@ mod tests {
         (gestalt_concatenation, b"+\"2\"{\"2\"}", Var::Gestalt(b"22".to_vec())),
         (set_linear_appending, b"+[3]{2}", Var::Set([Var::Linear(3.0), Var::Linear(2.0)].to_vec())),
         (set_geslalt_appending, b"+[3]{\"2\"}", Var::Set([Var::Linear(3.0), Var::Gestalt(b"2".to_vec())].to_vec())),
-        (set_concatenation, b"+[1,2]{[3,4]}", Var::Set([
+        (set_set_appending, b"+[1,2]{[3,4]}", Var::Set([
             Var::Linear(1.0),
             Var::Linear(2.0),
-            Var::Linear(3.0),
-            Var::Linear(4.0)
+            Var::Set([
+                Var::Linear(3.0),
+                Var::Linear(4.0)
+            ].to_vec())
         ].to_vec())),
 
         (subtraction, b"-3{2}", Var::Linear(1.0)),
@@ -54,6 +56,13 @@ mod tests {
         (set_removal, b"-[1,2,3]{2}", Var::Set([Var::Linear(1.0), Var::Linear(2.0)].to_vec())),
 
         (multiplication, b"*3{2}", Var::Linear(6.0)),
+        (set_concatenation, b"*[1,2]{[3,4]}", Var::Set([
+            Var::Linear(1.0),
+            Var::Linear(2.0),
+            Var::Linear(3.0),
+            Var::Linear(4.0)
+        ].to_vec())),
+
         (division, b"/3{2}", Var::Linear(1.5)),
         (exponentiation, b"^3{2}", Var::Linear(9.0)),
         (set_length, b"^[1,2,3]{_}", Var::Linear(3.0)),

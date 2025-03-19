@@ -1,7 +1,4 @@
 ROADMAP:
-- write tests for each operation (including variants of course)
-- debug using test results
-- write benchmarks for various common problems
 - write handbook
     - dont forget about !0{$} for recursion
     - dont forget that loop bodies should return NOTHING ALWAYS

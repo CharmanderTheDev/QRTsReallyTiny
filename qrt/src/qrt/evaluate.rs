@@ -481,6 +481,8 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                             Ok((cstring_from_utf8!(a) + &cstring_from_utf8!(b)).into())
                                         }),
 
+                                        //Please note that all the disgusting, unperformant set cloning in this language was intended to be remedied with a kind of
+                                        //reference system, but that rust fundamentally does not allow multiple mutable references so that couldn't be done.
                                         (Set, Linear, Set|a: Vec<Var>, b: f64| -> Result<Vec<Var>, &str> {
                                             let mut newset = a.clone();
                                             newset.push(Var::Linear(b));
@@ -493,9 +495,10 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                             Ok(newset)
                                         }),
 
-                                        (Set, Set, Set|mut a: Vec<Var>, b: Vec<Var>| -> Result<Vec<Var>, &str> {
-                                            for var in b {a.push(var.clone())}
-                                            Ok(a)
+                                        (Set, Set, Set|a: Vec<Var>, b: Vec<Var>| -> Result<Vec<Var>, &str> {
+                                            let mut newset = a.clone();
+                                            newset.push(Var::Set(b));
+                                            Ok(newset)
                                         })
                                     );
                                 }
@@ -520,7 +523,13 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                 //Multiplication
                                 b'*' => {
                                     multi_operate!(
-                                        (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a * b)})
+                                        (Linear, Linear, Linear|a: f64, b: f64| -> Result<f64, &str> {Ok(a * b)}),
+
+                                        //Set concatenation
+                                        (Set, Set, Set|mut a: Vec<Var>, b: Vec<Var>| -> Result<Vec<Var>, &str> {
+                                            for var in b {a.push(var.clone())}
+                                            Ok(a)
+                                        })
                                     )
                                 }
                                 //Division
