@@ -180,6 +180,19 @@ miscellaneous:
         Gestalt-Linear (gestalt access) returns the character of a at index b (floor function is used for non-integers)
         Set-Linear (set access) returns the element of a at index b (floor function is used for non-integers)
 
+TERMINAL USAGE AND DEBUGGING:
+Running QRT:
+ensure you are in the same folder as the qrt.exe interpreter, then, after writing your QRT code,
+run the program by typing ./qrt {FILENAME} {DEBUG NUMBER}. The filename should not include the .qrt suffix,
+so if your file is named main.qrt, simply type in main.
+
+Debug numbers:
+debug numbers control how much information you are given in the event of an error.
+0 will give you only the thrown error, as well as the line and character it occured on.
+1 will give you a "stack trace" (honestly you'll need to understand the interpreter for this one)
+2 will give you a "map trace" (showing all of your aliases and their values)
+3 will give you both a stack and map trace.
+
 For a good reference, take a look in the ./qrt/src/tests.rs file for a bunch of little QRT programs, 
 including the sieve of eratosthenes.
 

@@ -1,5 +1,0 @@
-ROADMAP:
-- write handbook
-    - dont forget about !0{$} for recursion
-    - dont forget that loop bodies should return NOTHING ALWAYS
-- launch
