@@ -359,7 +359,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                 if program[on] == b'_' {
                     stack.push_front(Abstract::Operator(operator));
                     stack.push_front(Abstract::Var(Var::void()));
-                    continue
+                    continue;
                 }
 
                 if program[on] == b'!' {
@@ -451,7 +451,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
                                     //This allows "value discarding" with assignment
                                     if let Abstract::Var(Var::Void(_)) = unpack_stack!(1) {
                                         clear_and_progress!();
-                                        continue
+                                        continue;
                                     }
 
                                     map.insert(
@@ -557,7 +557,7 @@ pub fn evaluate(program: &[u8], input: &Var) -> Evaluation {
 
                                         //Special cases for giving the length of sets and gestalts
                                         (Gestalt, Void, Linear|a: Vec<u8>, _b: ()| -> Result<f64, &str> {Ok(a.len() as f64)}),
-                                        
+
                                         (Set, Void, Linear|a: Vec<Var>, _b: ()| -> Result<f64, &str> {Ok(a.len() as f64)})
                                     )
                                 }
